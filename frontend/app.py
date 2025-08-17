@@ -6,13 +6,16 @@ import requests
 import json
 from datetime import datetime
 import os
+# from modules.upload import Upload
+# from modules.search import Search
+# from modules.analytics import Analytics
 
 # Page configuration
 st.set_page_config(
     page_title="Speech2SQL - 강의·회의록 생성 및 검색 시스템",
-    page_icon="🎤",
+    page_icon="📑",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 # Custom CSS
@@ -38,12 +41,31 @@ st.markdown("""
         border-left: 5px solid #1f77b4;
         margin-bottom: 1rem;
     }
+    .feature-fard:hover {
+        cursor: pointer;
+    }
     .upload-area {
         border: 2px dashed #ccc;
         border-radius: 10px;
         padding: 2rem;
         text-align: center;
         background-color: #fafafa;
+    }
+    .upload-area:hover {
+        cursor: pointer;
+    }
+    .stButton > button {
+    background-color: #1f77b4;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+    }
+    .stButton > button:hover {
+    background-color: #145a86;
+    color: white;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -56,16 +78,16 @@ def main():
     """Main application"""
     
     # Header
-    st.markdown('<h1 class="main-header">🎤 Speech2SQL</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🎤 Speech2SQL 📑</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">강의·회의록 생성 및 검색 시스템</p>', unsafe_allow_html=True)
     
     # Sidebar navigation
-    st.sidebar.title("📋 메뉴")
+    # st.sidebar.title("📋 메뉴")
     page = st.sidebar.selectbox(
         "페이지 선택",
         ["🏠 홈", "📁 파일 업로드", "🔍 자연어 검색", "📊 분석 대시보드", "📄 요약 생성"]
     )
-    
+
     # Page routing
     if page == "🏠 홈":
         show_home_page()
@@ -81,7 +103,7 @@ def main():
 
 def show_home_page():
     """Home page content"""
-    st.header("🏠 환영합니다!")
+    st.header("📱 기능 소개")
     
     # Features overview
     col1, col2 = st.columns(2)
@@ -142,7 +164,7 @@ def show_upload_page():
         
         participants = st.text_area(
             "참가자 목록",
-            placeholder="참가자 이름을 줄바꿈으로 구분하여 입력하세요\n예:\n김철수\n이영희\n박민수"
+            placeholder="참가자 이름을 줄바꿈으로 구분하여 입력하세요 \n예:\n김철수\n이영희\n박민수"
         )
         
         submitted = st.form_submit_button("업로드 및 처리 시작")
@@ -236,7 +258,7 @@ def show_summary_page():
         ["일반 요약", "액션 아이템", "결정사항"]
     )
     
-    if st.button("📄 요약 생성", type="primary"):
+    if st.button("▶️ 요약 생성", type="primary"):
         # TODO: Implement summary generation
         st.success("요약 생성이 시작되었습니다!")
         
