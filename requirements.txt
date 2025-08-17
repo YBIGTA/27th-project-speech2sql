@@ -20,7 +20,7 @@ transformers==4.35.2
 torch==2.1.1
 torchaudio==2.1.1
 sentence-transformers==2.2.2
-pegasus==1.0.0
+# pegasus==1.0.0
 datasets==2.14.6
 
 # Text2SQL

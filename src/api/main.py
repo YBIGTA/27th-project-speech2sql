@@ -14,7 +14,7 @@ from src.api.routes import audio, query, summary
 # Create FastAPI app
 app = FastAPI(
     title="Speech2SQL API",
-    description="강의·회의록 생성 및 검색 시스템 API",
+    description="Lecture and Meeting Recording Generation and Search System API",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
