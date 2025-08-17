@@ -3,11 +3,13 @@ Audio processing API routes
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from typing import List
+from typing import List, Optional
+from sqlalchemy.orm import Session
 import os
 from datetime import datetime
 from config.settings import settings
 from config.database import get_db
+from src.database.operations import MeetingOperations
 
 router = APIRouter()
 
@@ -16,7 +18,8 @@ router = APIRouter()
 async def upload_audio(
     file: UploadFile = File(...),
     title: str = None,
-    participants: List[str] = None
+    participants: List[str] = None,
+    db: Session = Depends(get_db)
 ):
     """
     Upload audio file for processing
@@ -61,68 +64,167 @@ async def upload_audio(
     with open(file_path, "wb") as f:
         f.write(content)
     
-    # TODO: Process audio with Whisper STT and Speaker Diarization
-    # This will be implemented by 팀원 A
-    
-    return JSONResponse({
-        "message": "Audio file uploaded successfully",
-        "filename": filename,
-        "file_path": file_path,
-        "file_size": file_size,
-        "title": title,
-        "participants": participants,
-        "status": "uploaded"
-    })
+    # Create meeting in database
+    try:
+        meeting = MeetingOperations.create_meeting(
+            db=db,
+            title=title or f"Meeting {timestamp}",
+            participants=participants or [],
+            audio_path=file_path
+        )
+        
+        # TODO: Process audio with Whisper STT and Speaker Diarization
+        # This will be implemented by 팀원 A
+        
+        return JSONResponse({
+            "message": "Audio file uploaded successfully",
+            "meeting_id": meeting.id,
+            "filename": filename,
+            "file_path": file_path,
+            "file_size": file_size,
+            "title": meeting.title,
+            "participants": meeting.participants,
+            "status": "uploaded",
+            "created_at": meeting.created_at.isoformat()
+        })
+    except Exception as e:
+        # Clean up file if database operation fails
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@router.get("/status/{file_id}")
-async def get_processing_status(file_id: str):
+@router.get("/status/{filename}")
+async def get_processing_status(filename: str, db: Session = Depends(get_db)):
     """
     Get audio processing status
     
     Args:
-        file_id: File identifier
+        filename: Audio filename
     
     Returns:
         Processing status
     """
-    # TODO: Implement status checking
+    meeting = MeetingOperations.get_meeting_by_filename(db, filename)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Check if audio file exists
+    audio_exists = os.path.exists(meeting.audio_path) if meeting.audio_path else False
+    
+    # Simple status logic (can be enhanced later)
+    if meeting.summary:
+        status = "completed"
+        progress = 1.0
+        message = "Audio processing completed"
+        stt_completed = True
+        diarization_completed = True
+        summary_completed = True
+    elif audio_exists:
+        status = "processing"
+        progress = 0.5
+        message = "Audio processing in progress"
+        stt_completed = True
+        diarization_completed = False
+        summary_completed = False
+    else:
+        status = "failed"
+        progress = 0.0
+        message = "Audio file not found"
+        stt_completed = False
+        diarization_completed = False
+        summary_completed = False
+    
     return {
-        "file_id": file_id,
-        "status": "processing",
-        "progress": 0.5,
-        "message": "Audio processing in progress"
+        "filename": filename,
+        "status": status,
+        "progress": progress,
+        "stt_completed": stt_completed,
+        "diarization_completed": diarization_completed,
+        "summary_completed": summary_completed,
+        "estimated_completion": meeting.updated_at.isoformat() if meeting.updated_at else None,
+        "message": message
     }
 
 
 @router.get("/files")
-async def list_audio_files():
+async def list_audio_files(
+    skip: int = 0,
+    limit: int = 100,
+    title_search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """
     List all uploaded audio files
+    
+    Args:
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+        title_search: Optional title search filter
     
     Returns:
         List of audio files
     """
-    # TODO: Implement file listing from database
+    meetings = MeetingOperations.get_meetings(
+        db=db,
+        skip=skip,
+        limit=limit,
+        title_search=title_search
+    )
+    
+    files = []
+    for meeting in meetings:
+        # Check if audio file exists
+        audio_exists = os.path.exists(meeting.audio_path) if meeting.audio_path else False
+        filename = os.path.basename(meeting.audio_path) if meeting.audio_path else None
+        
+        if filename:  # Only include meetings with audio files
+            files.append({
+                "filename": filename,
+                "title": meeting.title,
+                "upload_date": meeting.created_at.isoformat(),
+                "status": "completed" if meeting.summary else "processing",
+                "duration": meeting.duration,
+                "participants": meeting.participants
+            })
+    
     return {
-        "files": [],
-        "total": 0
+        "files": files,
+        "total": len(files),
+        "skip": skip,
+        "limit": limit
     }
 
 
-@router.delete("/files/{file_id}")
-async def delete_audio_file(file_id: str):
+@router.delete("/{filename}")
+async def delete_audio_file(filename: str, db: Session = Depends(get_db)):
     """
-    Delete audio file
+    Delete audio file and meeting
     
     Args:
-        file_id: File identifier
+        filename: Audio filename
     
     Returns:
         Deletion confirmation
     """
-    # TODO: Implement file deletion
+    meeting = MeetingOperations.get_meeting_by_filename(db, filename)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Delete physical audio file if exists
+    if meeting.audio_path and os.path.exists(meeting.audio_path):
+        try:
+            os.remove(meeting.audio_path)
+        except OSError as e:
+            # Log warning but continue with database deletion
+            print(f"Warning: Could not delete audio file {meeting.audio_path}: {e}")
+    
+    # Delete from database using filename
+    deleted_meeting = MeetingOperations.delete_meeting_by_filename(db, filename)
+    if not deleted_meeting:
+        raise HTTPException(status_code=500, detail="Failed to delete meeting from database")
+    
     return {
-        "message": f"File {file_id} deleted successfully",
-        "file_id": file_id
+        "message": "Audio file deleted successfully",
+        "filename": filename
     } 

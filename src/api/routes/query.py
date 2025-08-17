@@ -4,7 +4,10 @@ Natural language query API routes
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+from sqlalchemy.orm import Session
+import time
 from config.database import get_db
+from src.database.operations import SearchOperations, AnalyticsOperations
 
 router = APIRouter()
 
@@ -28,7 +31,7 @@ class QueryResponse(BaseModel):
 
 
 @router.post("/natural", response_model=QueryResponse)
-async def natural_language_query(request: QueryRequest):
+async def natural_language_query(request: QueryRequest, db: Session = Depends(get_db)):
     """
     Process natural language query and return results
     
@@ -38,65 +41,96 @@ async def natural_language_query(request: QueryRequest):
     Returns:
         Query results with SQL translation
     """
-    # TODO: Implement Text2SQL conversion
+    start_time = time.time()
+    
+    # TODO: Implement Text2SQL conversion with LLM
     # This will be implemented by 팀원 B
+    # For now, use simple text search
     
-    # Mock response for now
-    mock_sql = f"SELECT * FROM utterances WHERE text LIKE '%{request.query}%' LIMIT {request.limit}"
-    
-    return QueryResponse(
-        query=request.query,
-        sql_query=mock_sql,
-        results=[
-            {
-                "id": 1,
-                "speaker": "김철수",
-                "timestamp": 120.5,
-                "text": f"검색된 내용: {request.query}",
-                "meeting_title": "팀 미팅"
-            }
-        ],
-        total_count=1,
-        execution_time=0.1
-    )
+    try:
+        # Use the search operations to find relevant content
+        search_results = SearchOperations.search_meetings_and_utterances(
+            db=db,
+            search_query=request.query,
+            meeting_id=request.meeting_id,
+            speaker=request.speaker,
+            limit=request.limit or 10
+        )
+        
+        # Generate mock SQL for demonstration
+        conditions = []
+        if request.query:
+            conditions.append(f"text ILIKE '%{request.query}%'")
+        if request.meeting_id:
+            conditions.append(f"meeting_id = {request.meeting_id}")
+        if request.speaker:
+            conditions.append(f"speaker = '{request.speaker}'")
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        mock_sql = f"SELECT u.*, m.title FROM utterances u JOIN meetings m ON u.meeting_id = m.id WHERE {where_clause} LIMIT {request.limit or 10}"
+        
+        execution_time = time.time() - start_time
+        
+        return QueryResponse(
+            query=request.query,
+            sql_query=mock_sql,
+            results=search_results["results"],
+            total_count=search_results["total_count"],
+            execution_time=round(execution_time, 3)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 
 @router.get("/suggestions")
-async def get_query_suggestions():
+async def get_query_suggestions(db: Session = Depends(get_db)):
     """
     Get query suggestions for common questions
     
     Returns:
         List of suggested queries
     """
-    suggestions = [
+    # Get dynamic suggestions from database
+    db_suggestions = SearchOperations.get_search_suggestions(db)
+    
+    # Combine with static suggestions
+    static_suggestions = [
         "누가 프로젝트 일정에 대해 언급했나요?",
         "어떤 결정사항이 나왔나요?",
         "담당자가 할당된 작업은 무엇인가요?",
-        "특정 키워드가 언급된 부분을 찾아주세요",
         "회의에서 논의된 주요 주제는 무엇인가요?"
     ]
     
+    all_suggestions = static_suggestions + db_suggestions
+    
     return {
-        "suggestions": suggestions,
-        "total": len(suggestions)
+        "suggestions": all_suggestions,
+        "total": len(all_suggestions),
+        "static_count": len(static_suggestions),
+        "dynamic_count": len(db_suggestions)
     }
 
 
 @router.get("/analytics")
-async def get_query_analytics():
+async def get_query_analytics(db: Session = Depends(get_db)):
     """
     Get query analytics and usage statistics
     
     Returns:
         Analytics data
     """
-    # TODO: Implement analytics
+    stats = AnalyticsOperations.get_meeting_statistics(db)
+    
+    # TODO: Implement actual query logging and analytics
+    # For now, return basic stats from meetings and utterances
+    
     return {
-        "total_queries": 0,
-        "popular_queries": [],
-        "average_response_time": 0.0,
-        "success_rate": 0.0
+        "total_meetings": stats["total_meetings"],
+        "total_utterances": stats["total_utterances"],
+        "searchable_content": stats["total_utterances"] > 0,
+        "average_meeting_duration": stats["average_duration_minutes"],
+        "data_coverage": "meetings and utterances available for search"
     }
 
 
