@@ -42,6 +42,11 @@ def get_postgresql_session():
 
 def create_tables():
     """Create database tables"""
+    import importlib
+    try:
+        importlib.import_module("src.database.models")  # 모델 강제 로드
+    except ModuleNotFoundError:
+        importlib.import_module("database.models")      # 경로가 다른 경우 대비
     Base.metadata.create_all(bind=get_postgresql_engine())
 
 

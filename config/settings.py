@@ -17,11 +17,13 @@ class Settings(BaseSettings):
     postgresql_user: str = Field(default="postgres", env="POSTGRESQL_USER")
     postgresql_password: str = Field(default="password", env="POSTGRESQL_PASSWORD")
     postgresql_database: str = Field(default="speech2sql", env="POSTGRESQL_DATABASE")
-    postgresql_url: str = Field(default="postgresql://postgres:password@localhost:5432/speech2sql", env="POSTGRESQL_URL")
+    postgresql_url: Optional[str] = Field(default=None, env="POSTGRESQL_URL")
     
     # API Keys
     upstage_api_key: Optional[str] = Field(default=None, env="UPSTAGE_API_KEY")
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
+    huggingface_token: Optional[str] = Field(default=None, env="HUGGINGFACE_TOKEN")
+    
     
     # Model Configuration
     whisper_model: str = Field(default="base", env="WHISPER_MODEL")
