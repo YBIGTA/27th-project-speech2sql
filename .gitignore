@@ -109,6 +109,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+## Local virtualenv placed in repo root (named same as project)
+speech2sql/
 
 # Spyder project settings
 .spyderproject
@@ -284,3 +286,4 @@ development/
 # Production
 prod/
 production/ 
+
