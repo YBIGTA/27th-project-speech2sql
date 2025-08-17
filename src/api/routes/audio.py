@@ -11,6 +11,7 @@ from config.database import get_db
 from sqlalchemy.orm import Session
 from src.database.models import Meeting, Utterance
 from src.audio.whisper_stt import transcribe_audio
+from src.audio.speaker_diarization import assign_speakers
 
 router = APIRouter()
 
@@ -85,17 +86,33 @@ async def upload_audio(
         stt = transcribe_audio(file_path, model_name=settings.whisper_model)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"STT failed: {e}")
+    
+    # Assign speakers using diarization
+    try:
+        labeled = assign_speakers(file_path, stt["segments"], prefer_pyannote=True)
+    except Exception:
+        # 혹시 예외가 여기까지 올라오면 보수적으로 1명 화자로 태깅
+        labeled = [{"speaker": "Speaker 1", "timestamp": float(s.get("start", 0.0)),
+                    "start": float(s.get("start", 0.0)), "end": s.get("end"),
+                    "text": (s.get("text") or "").strip()} for s in stt.get("segments", [])]
+
+    # Update meeting participants
+    detected_speakers = sorted({seg.get("speaker", "Speaker 1") for seg in labeled})
+    merged_participants = sorted(set(meeting.participants or []).union(detected_speakers))
+    if merged_participants != (meeting.participants or []):
+        meeting.participants = merged_participants
+        db.add(meeting)
 
     # Store utterances
     inserted = 0
-    for seg in stt.get("segments", []):
+    for seg in labeled:
         text = (seg.get("text") or "").strip()
         if not text:
             continue
-        start_ts = float(seg.get("start", 0.0))
-        end_ts = float(seg.get("end", 0.0)) if seg.get("end") is not None else None
+        start_ts = float(seg.get("start", seg.get("timestamp", 0.0)) or 0.0)
+        end_ts = seg.get("end")
+        spk = seg.get("speaker") or "Speaker 1"
 
-        # skip if exists
         exists = (
             db.query(Utterance.id)
             .filter(Utterance.meeting_id == meeting.id)
@@ -106,15 +123,14 @@ async def upload_audio(
         if exists:
             continue
 
-        utt = Utterance(
+        db.add(Utterance(
             meeting_id=meeting.id,
-            speaker="SPEAKER_1",
+            speaker=spk,
             timestamp=start_ts,
-            end_timestamp=end_ts,
+            end_timestamp=float(end_ts) if end_ts is not None else None,
             text=text,
             language=stt.get("language") or "ko",
-        )
-        db.add(utt)
+        ))
         inserted += 1
 
     db.commit()
@@ -125,8 +141,9 @@ async def upload_audio(
         "file_path": file_path,
         "file_size": file_size,
         "title": meeting_title,
-        "participants": participants or [],
+        "participants": meeting.participants or [],
         "segments": inserted,
+        "speakers_detected": detected_speakers,
         "status": "processed"
     })
 
