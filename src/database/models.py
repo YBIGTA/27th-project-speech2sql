@@ -3,7 +3,7 @@ Database models for Speech2SQL application
 """
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, JSON, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, JSON, Index, text as sa_text
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from config.database import Base
@@ -23,9 +23,15 @@ class Meeting(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # PostgreSQL full-text search index
+    # PostgreSQL functional GIN index on tsvector for full-text search
     __table_args__ = (
-        Index('idx_meetings_title_search', 'title', postgresql_using='gin'),
+        # Basic btree indexes are created by ORM for 'index=True' columns
+        # Full-text search index using to_tsvector on title
+        Index(
+            'idx_meetings_title_tsv',
+            sa_text("to_tsvector('simple', coalesce(title, ''))"),
+            postgresql_using='gin'
+        ),
     )
     
     # Relationships
@@ -47,9 +53,13 @@ class Utterance(Base):
     language = Column(String(10), default="ko")  # Language code
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # PostgreSQL full-text search index for Korean text
+    # PostgreSQL functional GIN index on tsvector for full-text search
     __table_args__ = (
-        Index('idx_utterances_text_search', 'text', postgresql_using='gin'),
+        Index(
+            'idx_utterances_text_tsv',
+            sa_text("to_tsvector('simple', coalesce(text, ''))"),
+            postgresql_using='gin'
+        ),
     )
     
     # Relationships

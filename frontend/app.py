@@ -6,6 +6,7 @@ import requests
 import json
 from datetime import datetime
 import os
+from typing import Dict
 
 # Page configuration
 st.set_page_config(
@@ -134,126 +135,99 @@ def show_upload_page():
     with st.form("upload_form"):
         uploaded_file = st.file_uploader(
             "오디오 파일 선택",
-            type=['wav', 'mp3', 'm4a'],
-            help="지원 형식: WAV, MP3, M4A (최대 100MB)"
+            type=['wav'],
+            help="지원 형식: WAV (최대 100MB)"
         )
-        
         title = st.text_input("회의 제목", placeholder="예: 팀 프로젝트 기획 회의")
-        
-        participants = st.text_area(
+        participants_text = st.text_area(
             "참가자 목록",
             placeholder="참가자 이름을 줄바꿈으로 구분하여 입력하세요\n예:\n김철수\n이영희\n박민수"
         )
-        
         submitted = st.form_submit_button("업로드 및 처리 시작")
-        
-        if submitted and uploaded_file:
-            # TODO: Implement file upload to API
-            st.success(f"파일 '{uploaded_file.name}' 업로드 완료!")
-            st.info("음성 인식 및 요약 처리가 진행 중입니다. 잠시만 기다려주세요.")
+
+        if submitted:
+            if not uploaded_file:
+                st.error("파일을 선택하세요.")
+                return
+            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type or "application/octet-stream")}
+            data = {"title": title}
+            try:
+                resp = requests.post(f"{API_BASE_URL}/audio/upload", files=files, data=data, timeout=600)
+                if resp.status_code == 200:
+                    j = resp.json()
+                    st.success(f"업로드 성공: segments={j.get('segments')} 파일={j.get('filename')}")
+                else:
+                    st.error(f"업로드 실패: {resp.status_code} {resp.text}")
+            except Exception as e:
+                st.error(f"요청 오류: {e}")
+
+
+@st.cache_data(ttl=30)
+def _fetch_meetings() -> Dict[str, int]:
+    try:
+        r = requests.get(f"{API_BASE_URL}/query/meetings", timeout=10)
+        if r.status_code == 200:
+            data = r.json().get("meetings", [])
+            # map title (display) to id
+            return {f"{m.get('title')} (id:{m.get('id')})": m.get('id') for m in data}
+    except Exception:
+        pass
+    return {}
 
 
 def show_search_page():
     """Natural language search page"""
     st.header("🔍 자연어 검색")
     
-    # Search interface
-    query = st.text_input(
-        "검색어 입력",
-        placeholder="예: 누가 프로젝트 일정에 대해 언급했나요?"
-    )
-    
-    col1, col2 = st.columns([3, 1])
-    
+    query = st.text_input("검색어 입력", placeholder="예: 누가 프로젝트 일정에 대해 언급했나요?")
+
+    meetings_map = _fetch_meetings()
+    titles = ["전체(미지정)"] + list(meetings_map.keys())
+    sel = st.selectbox("회의 선택(선택)", titles, index=0, help="text2sql 모드에서는 회의 지정 시 해당 회의로 범위를 제한합니다.")
+    selected_meeting_id = None if sel == "전체(미지정)" else meetings_map.get(sel)
+
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        search_button = st.button("🔍 검색", type="primary")
-    
+        mode = st.selectbox("검색 모드", ["text2sql", "fts"], index=0, help="text2sql: NL→SQL, fts: Full-Text Search")
     with col2:
-        limit = st.selectbox("결과 수", [5, 10, 20, 50])
-    
-    if search_button and query:
-        # TODO: Implement search API call
+        limit = st.selectbox("결과 수", [5, 10, 20, 50], index=0)
+    with col3:
+        run = st.button("🔍 검색", type="primary")
+
+    if run and query:
         st.info("검색 중...")
-        
-        # Mock results
-        st.subheader("검색 결과")
-        st.markdown(f"**검색어**: {query}")
-        st.markdown(f"**결과 수**: 3개")
-        
-        for i in range(3):
-            with st.expander(f"결과 {i+1}"):
-                st.markdown("**발화자**: 김철수")
-                st.markdown("**시간**: 2분 30초")
-                st.markdown("**내용**: 프로젝트 일정에 대해 논의했습니다.")
-                st.markdown("**회의**: 팀 프로젝트 기획 회의")
+        try:
+            payload = {"query": query, "limit": int(limit), "mode": mode}
+            if selected_meeting_id:
+                payload["meeting_id"] = int(selected_meeting_id)
+            resp = requests.post(f"{API_BASE_URL}/query/natural", json=payload, timeout=60)
+            if resp.status_code == 200:
+                j = resp.json()
+                st.subheader("검색 결과")
+                st.caption(f"SQL: {j.get('sql_query')}")
+                st.caption(f"총 {j.get('total_count')}건, 실행 {j.get('execution_time')}s")
+                for i, r in enumerate(j.get("results", []), start=1):
+                    with st.expander(f"결과 {i}"):
+                        st.markdown(f"**발화자**: {r.get('speaker','-')}")
+                        st.markdown(f"**시간**: {r.get('timestamp','-')}")
+                        st.markdown(f"**내용**: {r.get('text','')}")
+                        st.markdown(f"**회의**: {r.get('meeting_title','-')}")
+            else:
+                st.error(f"검색 실패: {resp.status_code} {resp.text}")
+        except Exception as e:
+            st.error(f"요청 오류: {e}")
 
 
 def show_analytics_page():
     """Analytics dashboard page"""
     st.header("📊 분석 대시보드")
-    
-    # Statistics cards
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("총 회의 수", "15")
-    
-    with col2:
-        st.metric("총 발화 시간", "45시간")
-    
-    with col3:
-        st.metric("평균 회의 시간", "3시간")
-    
-    with col4:
-        st.metric("결정사항 수", "23개")
-    
-    # Charts
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("회의 참가자별 발화 시간")
-        # TODO: Add chart
-        st.info("차트가 여기에 표시됩니다")
-    
-    with col2:
-        st.subheader("월별 회의 빈도")
-        # TODO: Add chart
-        st.info("차트가 여기에 표시됩니다")
+    st.info("향후 구현 예정")
 
 
 def show_summary_page():
     """Summary generation page"""
     st.header("📄 요약 생성")
-    
-    # Meeting selection
-    meeting_id = st.selectbox(
-        "회의 선택",
-        ["회의 1: 팀 프로젝트 기획", "회의 2: 개발 일정 논의", "회의 3: 마케팅 전략"]
-    )
-    
-    summary_type = st.selectbox(
-        "요약 유형",
-        ["일반 요약", "액션 아이템", "결정사항"]
-    )
-    
-    if st.button("📄 요약 생성", type="primary"):
-        # TODO: Implement summary generation
-        st.success("요약 생성이 시작되었습니다!")
-        
-        # Mock summary
-        st.subheader("생성된 요약")
-        st.markdown("""
-        ### 주요 내용
-        이 회의에서는 프로젝트 일정과 담당자 배정에 대해 논의했습니다.
-        
-        ### 핵심 포인트
-        - 프로젝트 마감일은 다음 달 15일로 확정
-        - 김철수가 프론트엔드 개발 담당
-        - 이영희가 백엔드 개발 담당
-        
-        ### 액션 아이템
-        1. 프로젝트 계획서 작성 (담당: 김철수, 마감: 2024-01-10)
-        """)
+    st.info("향후 구현 예정")
 
 
 if __name__ == "__main__":

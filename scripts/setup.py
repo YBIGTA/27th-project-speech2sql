@@ -7,6 +7,7 @@ import sys
 import subprocess
 from pathlib import Path
 
+sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 def create_directories():
     """Create necessary directories"""
@@ -66,6 +67,14 @@ def check_database():
     print("⚠️  Database connection check not implemented yet")
 
 
+def create_database_tables():
+    """Create all database tables"""
+    from config.database import create_tables
+    print("\U0001F5C4️  Creating database tables...")
+    create_tables()
+    print("✅ Database tables created successfully!")
+
+
 def main():
     """Main setup function"""
     print("🚀 Setting up Speech2SQL project...")
@@ -84,11 +93,15 @@ def main():
     
     # Setup environment
     print("\n⚙️  Setting up environment...")
-    setup_environment()
+    #setup_environment()
     
     # Check database
     print("\n🗄️  Checking database...")
     check_database()
+
+    # Create database tables
+    print("\n🗄️  Creating database tables...")
+    create_database_tables()
     
     print("\n" + "=" * 50)
     print("✅ Setup completed successfully!")
