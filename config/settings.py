@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # API Keys
     upstage_api_key: Optional[str] = Field(default=None, env="UPSTAGE_API_KEY")
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
+    upstage_base_url: Optional[str] = Field(default="https://api.upstage.ai/v1", env="UPSTAGE_BASE_URL")
     
     # Model Configuration
     whisper_model: str = Field(default="base", env="WHISPER_MODEL")

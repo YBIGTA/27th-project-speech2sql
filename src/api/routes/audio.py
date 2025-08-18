@@ -11,6 +11,7 @@ from config.database import get_db
 from sqlalchemy.orm import Session
 from src.database.models import Meeting, Utterance
 from src.audio.whisper_stt import transcribe_audio
+from src.audio.speaker_diarization import assign_speakers
 
 router = APIRouter()
 
@@ -41,10 +42,10 @@ async def upload_audio(
         raise HTTPException(status_code=400, detail="No file provided")
 
     file_ext = os.path.splitext(file.filename)[1].lower()
-    if file_ext not in ['.wav', '.mp3', '.m4a']:
+    if file_ext not in ['.wav']:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type. Supported: {settings.supported_formats}"
+            detail=f"Unsupported file type. Supported: ['wav']"
         )
 
     # Validate file size
@@ -80,20 +81,30 @@ async def upload_audio(
         db.add(meeting)
         db.flush()
 
-    # Run Whisper STT (single speaker initial baseline)
+    # Run Whisper STT
     try:
         stt = transcribe_audio(file_path, model_name=settings.whisper_model)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"STT failed: {e}")
 
+    # Speaker diarization alignment (fallbacks to MVP inside if pyannote not available)
+    labeled_segments = assign_speakers(
+        audio_path=file_path,
+        stt_segments=stt.get("segments", []),
+        prefer_pyannote=True,
+    )
+
     # Store utterances
     inserted = 0
-    for seg in stt.get("segments", []):
+    for seg in labeled_segments:
         text = (seg.get("text") or "").strip()
         if not text:
             continue
-        start_ts = float(seg.get("start", 0.0))
-        end_ts = float(seg.get("end", 0.0)) if seg.get("end") is not None else None
+        # prefer explicit fields from diarization-labeled segment
+        start_ts = float(seg.get("start", seg.get("timestamp", 0.0)) or 0.0)
+        end_val = seg.get("end") if seg.get("end") is not None else seg.get("end_timestamp")
+        end_ts = float(end_val) if end_val is not None else None
+        speaker = str(seg.get("speaker") or "SPEAKER_1")
 
         # skip if exists
         exists = (
@@ -108,7 +119,7 @@ async def upload_audio(
 
         utt = Utterance(
             meeting_id=meeting.id,
-            speaker="SPEAKER_1",
+            speaker=speaker,
             timestamp=start_ts,
             end_timestamp=end_ts,
             text=text,

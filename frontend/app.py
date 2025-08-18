@@ -11,9 +11,9 @@ from typing import Dict
 # Page configuration
 st.set_page_config(
     page_title="Speech2SQL - 강의·회의록 생성 및 검색 시스템",
-    page_icon="🎤",
+    page_icon="📑",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 # Custom CSS
@@ -45,6 +45,22 @@ st.markdown("""
         padding: 2rem;
         text-align: center;
         background-color: #fafafa;
+    }
+    .upload-area:hover {
+        cursor: pointer;
+    }
+    .stButton > button {
+        background-color: #1f77b4;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-weight: bold;
+        transition: background-color 0.3s ease;
+    }
+    .stButton > button:hover {
+        background-color: #145a86;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
