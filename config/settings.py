@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     upstage_base_url: Optional[str] = Field(default="https://api.upstage.ai/v1", env="UPSTAGE_BASE_URL")
     
+    # Elasticsearch Configuration
+    elasticsearch_url: str = Field(default="http://localhost:9200", env="ELASTICSEARCH_URL")
+    elasticsearch_username: Optional[str] = Field(default=None, env="ELASTICSEARCH_USERNAME")
+    elasticsearch_password: Optional[str] = Field(default=None, env="ELASTICSEARCH_PASSWORD")
+    
     # Model Configuration
     whisper_model: str = Field(default="base", env="WHISPER_MODEL")
     summarization_model: str = Field(default="pegasus-large", env="SUMMARIZATION_MODEL")

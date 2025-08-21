@@ -31,6 +31,7 @@ def _parse_max_size(size_str: str) -> int:
 async def upload_audio(
     file: UploadFile = File(...),
     title: Optional[str] = None,
+    meeting_date: Optional[str] = None,
     participants: Optional[List[str]] = None,
     db: Session = Depends(get_db)
 ):
@@ -68,24 +69,69 @@ async def upload_audio(
     with open(file_path, "wb") as f:
         f.write(content)
 
+    # Parse meeting date if provided
+    parsed_meeting_date = None
+    if meeting_date:
+        try:
+            from datetime import datetime, date
+            # Parse date string (YYYY-MM-DD format)
+            parsed_date = date.fromisoformat(meeting_date)
+            # Convert to datetime with default time (noon)
+            parsed_meeting_date = datetime.combine(parsed_date, datetime.min.time().replace(hour=12))
+        except Exception as e:
+            print(f"Could not parse meeting date: {e}")
+    
     # Get or create Meeting
     meeting_title = title or os.path.splitext(file.filename)[0]
     meeting = db.query(Meeting).filter(Meeting.title == meeting_title).first()
     if not meeting:
         meeting = Meeting(
             title=meeting_title,
+            date=parsed_meeting_date,  # Use provided date instead of default
             participants=participants or [],
             summary="",
             audio_path=file_path,
         )
         db.add(meeting)
         db.flush()
+    else:
+        # Update existing meeting with new info if provided
+        if parsed_meeting_date:
+            meeting.date = parsed_meeting_date
+        if participants:
+            meeting.participants = participants
+
+    # Calculate audio duration
+    duration_seconds = 0.0
+    try:
+        import librosa
+        audio_data, sample_rate = librosa.load(file_path)
+        duration_seconds = len(audio_data) / sample_rate
+        print(f"Audio duration calculated: {duration_seconds:.2f} seconds")
+    except ImportError as e:
+        print(f"librosa not available: {e}")
+        # Try alternative method using wave module
+        try:
+            import wave
+            with wave.open(file_path, 'r') as audio_file:
+                frames = audio_file.getnframes()
+                sample_rate = audio_file.getframerate()
+                duration_seconds = frames / sample_rate
+                print(f"Audio duration calculated via wave: {duration_seconds:.2f} seconds")
+        except Exception as wave_e:
+            print(f"Could not calculate audio duration with wave: {wave_e}")
+    except Exception as e:
+        print(f"Could not calculate audio duration: {e}")
 
     # Run Whisper STT
     try:
         stt = transcribe_audio(file_path, model_name=settings.whisper_model)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"STT failed: {e}")
+    
+    # Also try to get duration from STT result if available
+    if 'duration' in stt and duration_seconds == 0.0:
+        duration_seconds = float(stt['duration'])
 
     # Speaker diarization alignment (fallbacks to MVP inside if pyannote not available)
     labeled_segments = assign_speakers(
@@ -128,6 +174,9 @@ async def upload_audio(
         db.add(utt)
         inserted += 1
 
+    # Update meeting with calculated duration
+    meeting.duration = duration_seconds
+    
     db.commit()
 
     return JSONResponse({

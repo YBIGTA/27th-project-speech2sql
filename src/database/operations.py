@@ -67,6 +67,7 @@ class MeetingOperations:
         meeting_id: int,
         title: str = None,
         summary: str = None,
+        summary_type: str = None,
         duration: float = None
     ) -> Optional[Meeting]:
         """Update meeting information"""
@@ -78,6 +79,8 @@ class MeetingOperations:
             meeting.title = title
         if summary is not None:
             meeting.summary = summary
+        if summary_type is not None:
+            meeting.summary_type = summary_type
         if duration is not None:
             meeting.duration = duration
         
