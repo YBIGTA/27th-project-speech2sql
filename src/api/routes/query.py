@@ -39,6 +39,79 @@ class QueryResponse(BaseModel):
     answer: Optional[str] = None
 
 
+def _llm_answer_from_rows(question: str, rows: List[Dict[str, Any]]) -> Optional[str]:
+    """Generate natural language answer from search results using LLM"""
+    if not settings.upstage_api_key or not rows:
+        return None
+    
+    # Build context from rows with speaker and timestamp info
+    context_parts = []
+    for r in rows[:15]:  # Use more context
+        speaker = r.get("speaker", "Unknown")
+        timestamp = r.get("timestamp")
+        text = (r.get("text") or "").strip()
+        
+        if text:
+            # Format timestamp if available
+            time_str = ""
+            if timestamp is not None:
+                try:
+                    minutes = int(timestamp // 60)
+                    seconds = int(timestamp % 60)
+                    time_str = f"[{minutes:02d}:{seconds:02d}] "
+                except:
+                    time_str = ""
+            
+            context_parts.append(f"{time_str}{speaker}: {text}")
+    
+    if not context_parts:
+        return None
+    
+    context = "\n".join(context_parts)
+    
+    # Enhanced system prompt for better natural language answers (works for both meetings and lectures)
+    sys = """당신은 음성 기록 검색 시스템의 AI 어시스턴트입니다. 사용자의 질문에 대해 제공된 내용을 바탕으로 자연스럽고 유용한 답변을 제공해주세요.
+
+답변 규칙:
+1. 제공된 내용만을 사용하여 답변하세요
+2. 구체적이고 명확한 정보를 제공하세요
+3. 발화자와 시간 정보를 포함하여 답변하세요
+4. 한국어로 자연스럽게 답변하세요
+5. 정보가 부족한 경우 "제공된 내용에서는 해당 정보를 찾을 수 없습니다"라고 답변하세요
+6. 답변은 2-3문장으로 간결하게 작성하세요
+7. 회의나 강의 모두에 적용 가능한 일반적인 답변을 제공하세요"""
+    
+    user = f"""질문: {question}
+
+음성 기록 내용:
+{context}
+
+위 내용을 바탕으로 질문에 답변해주세요."""
+    
+    payload = {
+        "model": "solar-1-mini-chat",
+        "messages": [
+            {"role": "system", "content": sys},
+            {"role": "user", "content": user},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 200,
+    }
+    
+    headers = {"Authorization": f"Bearer {settings.upstage_api_key}", "Content-Type": "application/json"}
+    
+    try:
+        resp = requests.post(f"{settings.upstage_base_url}/chat/completions", json=payload, headers=headers, timeout=30)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        ans = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        return ans or None
+    except Exception as e:
+        print(f"LLM answer generation failed: {e}")
+        return None
+
+
 def _run_fts(request: QueryRequest, db: Session) -> Dict[str, Any]:
     # Use english dictionary and websearch query for better relevance on AMI (English)
     tsvector = func.to_tsvector('english', Utterance.text)
@@ -301,44 +374,7 @@ def _run_text2sql(request: QueryRequest, db: Session) -> Dict[str, Any]:
             return f"{int(year)}년입니다."
         return None
 
-    def _llm_answer_from_rows(question: str, rows: List[Dict[str, Any]]) -> Optional[str]:
-        if not settings.upstage_api_key or not rows:
-            return None
-        # Build compact context from rows
-        snippets = []
-        for r in rows[:10]:
-            txt = (r.get("text") or "").strip()
-            if txt:
-                snippets.append(txt)
-        if not snippets:
-            return None
-        sys = (
-            "You answer user questions STRICTLY using the provided snippets. "
-            "Return a single short phrase (e.g., a date like '2001년', '2001년 1월 1일', a name, or a number). "
-            "Do not add extra words. If unknown, return '정보 없음'."
-        )
-        user = (
-            f"Question: {question}\n\nSnippets:\n- " + "\n- ".join(snippets)
-        )
-        payload = {
-            "model": "solar-pro",
-            "messages": [
-                {"role": "system", "content": sys},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.0,
-            "max_tokens": 64,
-        }
-        headers = {"Authorization": f"Bearer {settings.upstage_api_key}", "Content-Type": "application/json"}
-        try:
-            resp = requests.post(f"{settings.upstage_base_url}/chat/completions", json=payload, headers=headers, timeout=20)
-            if resp.status_code != 200:
-                return None
-            data = resp.json()
-            ans = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            return ans or None
-        except Exception:
-            return None
+
 
     try:
         result = db.execute(sa_text(sql_query), params)

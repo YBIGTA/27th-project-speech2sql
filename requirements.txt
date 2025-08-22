@@ -45,6 +45,11 @@ requests==2.31.0
 httpx==0.25.2
 python-multipart==0.0.6
 
+# Search & Indexing
+elasticsearch==8.11.0
+elasticsearch-dsl==8.11.0
+sentence-transformers==2.2.2
+
 # Environment & Config
 python-dotenv==1.0.0
 pydantic==2.5.0
