@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import streamlit as st
 import requests
 import json
@@ -96,3 +97,11 @@ def search_by_natural_language():
                 st.error(f"검색 실패: {resp.status_code} {resp.text}")
         except Exception as e:
             st.error(f"요청 오류: {e}")
+=======
+# 검색 인터페이스
+
+# 임시
+import streamlit as st
+
+class Search:
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8

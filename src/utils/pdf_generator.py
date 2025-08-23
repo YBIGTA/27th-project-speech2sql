@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """
 PDF generation utilities for meeting summaries
 """
@@ -713,3 +714,6 @@ def generate_analytics_pdf(analytics_data: Dict[str, Any], output_path: Optional
     """Generate analytics report PDF"""
     generator = PDFGenerator()
     return generator.generate_analytics_pdf(analytics_data, output_path)
+=======
+# 생성된 요약 내용을 pdf로 생성
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8

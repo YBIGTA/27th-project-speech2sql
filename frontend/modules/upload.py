@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import streamlit as st
 import requests
 import json
@@ -50,3 +51,11 @@ def upload_file():
                     st.error(f"업로드 실패: {resp.status_code} {resp.text}")
             except Exception as e:
                 st.error(f"요청 오류: {e}")
+=======
+# 파일 업로드
+
+# 임시
+import streamlit as st
+
+class Upload:
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8

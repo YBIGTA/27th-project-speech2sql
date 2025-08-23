@@ -6,10 +6,16 @@ import requests
 import json
 from datetime import datetime
 import os
+<<<<<<< HEAD
 from typing import Dict
 
 from modules.upload import upload_file
 from modules.search import search_by_natural_language, _fetch_meetings
+=======
+# from modules.upload import Upload
+# from modules.search import Search
+# from modules.analytics import Analytics
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
 
 # Page configuration
 st.set_page_config(
@@ -42,6 +48,9 @@ st.markdown("""
         border-left: 5px solid #1f77b4;
         margin-bottom: 1rem;
     }
+    .feature-fard:hover {
+        cursor: pointer;
+    }
     .upload-area {
         border: 2px dashed #ccc;
         border-radius: 10px;
@@ -53,6 +62,7 @@ st.markdown("""
         cursor: pointer;
     }
     .stButton > button {
+<<<<<<< HEAD
         background-color: #1f77b4;
         color: white;
         border: none;
@@ -66,6 +76,19 @@ st.markdown("""
         color: white;
     .stSelectbox > div:focus-within {
         border-color: #145a86;
+=======
+    background-color: #1f77b4;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+    }
+    .stButton > button:hover {
+    background-color: #145a86;
+    color: white;
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
     }
 </style>
 """, unsafe_allow_html=True)
@@ -78,16 +101,16 @@ def main():
     """Main application"""
     
     # Header
-    st.markdown('<h1 class="main-header">🎤 Speech2SQL</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🎤 Speech2SQL 📑</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">강의·회의록 생성 및 검색 시스템</p>', unsafe_allow_html=True)
     
     # Sidebar navigation
-    st.sidebar.title("📋 메뉴")
+    # st.sidebar.title("📋 메뉴")
     page = st.sidebar.selectbox(
         "페이지 선택",
         ["🏠 홈", "📁 파일 업로드", "🔍 자연어 검색", "📊 분석 대시보드", "📄 요약 생성"]
     )
-    
+
     # Page routing
     if page == "🏠 홈":
         show_home_page()
@@ -103,7 +126,7 @@ def main():
 
 def show_home_page():
     """Home page content"""
-    st.header("🏠 환영합니다!")
+    st.header("📱 기능 소개")
     
     # Features overview
     col1, col2 = st.columns(2)
@@ -150,7 +173,33 @@ def show_home_page():
 
 def show_upload_page():
     """File upload page"""
+<<<<<<< HEAD
     upload_file()
+=======
+    st.header("📁 파일 업로드")
+    
+    # Upload form
+    with st.form("upload_form"):
+        uploaded_file = st.file_uploader(
+            "오디오 파일 선택",
+            type=['wav', 'mp3', 'm4a'],
+            help="지원 형식: WAV, MP3, M4A (최대 100MB)"
+        )
+        
+        title = st.text_input("회의 제목", placeholder="예: 팀 프로젝트 기획 회의")
+        
+        participants = st.text_area(
+            "참가자 목록",
+            placeholder="참가자 이름을 줄바꿈으로 구분하여 입력하세요 \n예:\n김철수\n이영희\n박민수"
+        )
+        
+        submitted = st.form_submit_button("업로드 및 처리 시작")
+        
+        if submitted and uploaded_file:
+            # TODO: Implement file upload to API
+            st.success(f"파일 '{uploaded_file.name}' 업로드 완료!")
+            st.info("음성 인식 및 요약 처리가 진행 중입니다. 잠시만 기다려주세요.")
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
 
 
 def show_search_page():
@@ -182,8 +231,19 @@ def show_summary_page():
         help="업로드된 회의 목록에서 선택하세요"
     )
     
+<<<<<<< HEAD
     if selected_meeting:
         meeting_id = meetings_map[selected_meeting]
+=======
+    summary_type = st.selectbox(
+        "요약 유형",
+        ["일반 요약", "액션 아이템", "결정사항"]
+    )
+    
+    if st.button("▶️ 요약 생성", type="primary"):
+        # TODO: Implement summary generation
+        st.success("요약 생성이 시작되었습니다!")
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
         
         # Get meeting details
         try:
