@@ -8,6 +8,9 @@ from datetime import datetime
 import os
 from typing import Dict
 
+from modules.upload import upload_file
+from modules.search import search_by_natural_language, _fetch_meetings
+
 # Page configuration
 st.set_page_config(
     page_title="Speech2SQL - 강의·회의록 생성 및 검색 시스템",
@@ -61,6 +64,8 @@ st.markdown("""
     .stButton > button:hover {
         background-color: #145a86;
         color: white;
+    .stSelectbox > div:focus-within {
+        border-color: #145a86;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -145,142 +150,12 @@ def show_home_page():
 
 def show_upload_page():
     """File upload page"""
-    st.header("📁 파일 업로드")
-    
-    # Upload form
-    with st.form("upload_form"):
-        uploaded_file = st.file_uploader(
-            "오디오 파일 선택",
-            type=['wav'],
-            help="지원 형식: WAV (최대 100MB)"
-        )
-        title = st.text_input("회의 제목", placeholder="예: 팀 프로젝트 기획 회의")
-        
-        # Meeting date selection
-        meeting_date = st.date_input(
-            "회의 날짜",
-            value=datetime.now().date(),
-            help="실제 회의가 진행된 날짜를 선택하세요"
-        )
-        
-        participants_text = st.text_area(
-            "참가자 목록",
-            placeholder="참가자 이름을 줄바꿈으로 구분하여 입력하세요\n예:\n김철수\n이영희\n박민수"
-        )
-        submitted = st.form_submit_button("업로드 및 처리 시작")
-
-        if submitted:
-            if not uploaded_file:
-                st.error("파일을 선택하세요.")
-                return
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type or "application/octet-stream")}
-            data = {
-                "title": title,
-                "meeting_date": meeting_date.isoformat(),
-                "participants": participants_text.strip().split('\n') if participants_text.strip() else []
-            }
-            try:
-                resp = requests.post(f"{API_BASE_URL}/audio/upload", files=files, data=data, timeout=600)
-                if resp.status_code == 200:
-                    j = resp.json()
-                    st.success(f"업로드 성공: segments={j.get('segments')} 파일={j.get('filename')}")
-                else:
-                    st.error(f"업로드 실패: {resp.status_code} {resp.text}")
-            except Exception as e:
-                st.error(f"요청 오류: {e}")
-
-
-@st.cache_data(ttl=30)
-def _fetch_meetings() -> Dict[str, int]:
-    try:
-        r = requests.get(f"{API_BASE_URL}/query/meetings", timeout=10)
-        if r.status_code == 200:
-            data = r.json().get("meetings", [])
-            # map title (display) to id
-            return {f"{m.get('title')} (id:{m.get('id')})": m.get('id') for m in data}
-    except Exception:
-        pass
-    return {}
+    upload_file()
 
 
 def show_search_page():
     """Natural language search page"""
-    st.header("🔍 자연어 검색")
-    
-    query = st.text_input("검색어 입력", placeholder="예: 누가 프로젝트 일정에 대해 언급했나요?")
-    st.caption("💡 자연어로 질문하시면 AI가 음성 기록 내용을 분석하여 답변해드립니다.")
-    
-    # Example queries
-    st.subheader("💡 검색 예시")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("📅 날짜/시간", use_container_width=True):
-            st.session_state.query = "이 음성 기록은 언제 녹음되었나요?"
-    with col2:
-        if st.button("👥 참가자/화자", use_container_width=True):
-            st.session_state.query = "누가 이 음성 기록에 참여했나요?"
-    with col3:
-        if st.button("📋 주요 내용", use_container_width=True):
-            st.session_state.query = "이 음성 기록에서 주요하게 다룬 내용은 무엇인가요?"
-    
-    # Use session state for query
-    if hasattr(st.session_state, 'query') and st.session_state.query:
-        query = st.session_state.query
-        st.session_state.query = ""  # Clear after use
-
-    meetings_map = _fetch_meetings()
-    titles = ["전체(미지정)"] + list(meetings_map.keys())
-    sel = st.selectbox("회의 선택(선택)", titles, index=0, help="text2sql 모드에서는 회의 지정 시 해당 회의로 범위를 제한합니다.")
-    selected_meeting_id = None if sel == "전체(미지정)" else meetings_map.get(sel)
-
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        mode = st.selectbox("검색 모드", ["text2sql", "fts"], index=0, help="text2sql: NL→SQL, fts: Full-Text Search")
-    with col2:
-        limit = st.selectbox("결과 수", [5, 10, 20, 50], index=0)
-    with col3:
-        run = st.button("🔍 검색", type="primary")
-
-    if run and query:
-        st.info("검색 중...")
-        try:
-            payload = {"query": query, "limit": int(limit), "mode": mode}
-            if selected_meeting_id:
-                payload["meeting_id"] = int(selected_meeting_id)
-            resp = requests.post(f"{API_BASE_URL}/query/natural", json=payload, timeout=60)
-            if resp.status_code == 200:
-                j = resp.json()
-                st.subheader("검색 결과")
-                
-                # Display natural language answer prominently
-                answer = j.get('answer')
-                if answer:
-                    st.success("🤖 AI 답변")
-                    st.write(answer)
-                    st.divider()
-                
-                # Display technical details in collapsible section
-                with st.expander("🔧 기술적 세부사항"):
-                    st.caption(f"SQL: {j.get('sql_query')}")
-                    st.caption(f"총 {j.get('total_count')}건, 실행 {j.get('execution_time')}s")
-                
-                # Display source utterances
-                results = j.get("results", [])
-                if results:
-                    st.subheader("📋 참고 발화")
-                    for i, r in enumerate(results[:5], start=1):  # Show first 5 results
-                        with st.expander(f"발화 {i}"):
-                            st.markdown(f"**발화자**: {r.get('speaker','-')}")
-                            st.markdown(f"**시간**: {r.get('timestamp','-')}")
-                            st.markdown(f"**내용**: {r.get('text','')}")
-                            st.markdown(f"**회의**: {r.get('meeting_title','-')}")
-                    
-                    if len(results) > 5:
-                        st.info(f"... 및 {len(results) - 5}개의 추가 발화가 있습니다.")
-            else:
-                st.error(f"검색 실패: {resp.status_code} {resp.text}")
-        except Exception as e:
-            st.error(f"요청 오류: {e}")
+    search_by_natural_language()
 
 
 def show_analytics_page():
@@ -323,7 +198,8 @@ def show_summary_page():
                 with col2:
                     st.metric("회의 날짜", meeting_info.get('date', 'N/A')[:10] if meeting_info.get('date') else 'N/A')
                 with col3:
-                    st.metric("회의 시간", f"{meeting_info.get('duration', 0)}분")
+                    duration_minutes = round (meeting_info.get('duration', 0) / 60, 1)
+                    st.metric("회의 시간", f"{duration_minutes}분")
                 
                 # Participants
                 participants = meeting_info.get('participants', [])
@@ -472,4 +348,4 @@ def show_summary_page():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
