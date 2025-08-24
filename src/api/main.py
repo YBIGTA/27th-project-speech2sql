@@ -9,7 +9,7 @@ from config.settings import settings
 from config.database import create_tables, close_connections
 
 # Import routes
-from src.api.routes import audio, query, summary, search
+from src.api.routes import audio, query, summary, search, analysis
 
 # Create FastAPI app
 app = FastAPI(
@@ -34,6 +34,7 @@ app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
 app.include_router(query.router, prefix="/api/v1/query", tags=["query"])
 app.include_router(summary.router, prefix="/api/v1/summary", tags=["summary"])
 app.include_router(search.router, prefix="/api/v1/search", tags=["search"])
+app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["analysis"])
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")

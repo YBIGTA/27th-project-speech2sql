@@ -66,8 +66,16 @@ class PDFGenerator:
     
     def _try_system_korean_fonts(self):
         """Try to register system Korean fonts with better options"""
-        # Windows system fonts - try multiple options
+        # Windows system fonts - try multiple options (prioritize modern fonts)
         windows_fonts = [
+            # Modern fonts first
+            ('C:/Windows/Fonts/NanumSquareR.ttf', 'NanumSquare'),
+            ('C:/Windows/Fonts/NanumSquareB.ttf', 'NanumSquare-Bold'),
+            ('C:/Windows/Fonts/NanumGothic.ttf', 'NanumGothic'),
+            ('C:/Windows/Fonts/NanumGothicBold.ttf', 'NanumGothic-Bold'),
+            ('C:/Windows/Fonts/NanumBarunGothic.ttf', 'NanumBarunGothic'),
+            ('C:/Windows/Fonts/NanumBarunGothicBold.ttf', 'NanumBarunGothic-Bold'),
+            # Fallback to system fonts
             ('C:/Windows/Fonts/malgun.ttf', 'MalgunGothic'),
             ('C:/Windows/Fonts/malgunbd.ttf', 'MalgunGothic-Bold'),
             ('C:/Windows/Fonts/gulim.ttc', 'Gulim'),
@@ -91,8 +99,17 @@ class PDFGenerator:
                     print(f"Failed to register {font_name}: {e}")
                     continue
         
-        # Set the best available fonts
-        if 'MalgunGothic' in registered_fonts:
+        # Set the best available fonts (prioritize modern fonts)
+        if 'NanumSquare' in registered_fonts:
+            self.korean_font = 'NanumSquare'
+            self.korean_font_bold = 'NanumSquare-Bold' if 'NanumSquare-Bold' in registered_fonts else 'NanumSquare'
+        elif 'NanumGothic' in registered_fonts:
+            self.korean_font = 'NanumGothic'
+            self.korean_font_bold = 'NanumGothic-Bold' if 'NanumGothic-Bold' in registered_fonts else 'NanumGothic'
+        elif 'NanumBarunGothic' in registered_fonts:
+            self.korean_font = 'NanumBarunGothic'
+            self.korean_font_bold = 'NanumBarunGothic-Bold' if 'NanumBarunGothic-Bold' in registered_fonts else 'NanumBarunGothic'
+        elif 'MalgunGothic' in registered_fonts:
             self.korean_font = 'MalgunGothic'
             self.korean_font_bold = 'MalgunGothic-Bold' if 'MalgunGothic-Bold' in registered_fonts else 'MalgunGothic'
         elif 'Gulim' in registered_fonts:
@@ -155,30 +172,30 @@ class PDFGenerator:
         bg_light = colors.HexColor('#f8fafc')  # Light gray
         border_color = colors.HexColor('#e2e8f0')  # Border gray
         
-        # Title style - large, bold, centered with accent
+        # Title style - clean and modern (reduced size)
         self.title_style = ParagraphStyle(
             'ModernTitle',
             parent=self.styles['Title'],
-            fontSize=28,
+            fontSize=20,
             textColor=primary_color,
             alignment=TA_CENTER,
-            spaceAfter=30,
-            spaceBefore=20,
+            spaceAfter=20,
+            spaceBefore=15,
             fontName=getattr(self, 'korean_font_bold', 'Helvetica-Bold'),
-            leading=32
+            leading=24
         )
         
-        # Section heading style - clean and modern
+        # Section heading style - clean and modern (reduced size)
         self.heading_style = ParagraphStyle(
             'ModernHeading',
             parent=self.styles['Heading2'],
-            fontSize=18,
+            fontSize=14,
             textColor=text_dark,
-            spaceBefore=25,
-            spaceAfter=15,
+            spaceBefore=20,
+            spaceAfter=12,
             leftIndent=0,
             fontName=getattr(self, 'korean_font_bold', 'Helvetica-Bold'),
-            leading=22,
+            leading=18,
             borderWidth=0,
             borderColor=accent_color,
             borderPadding=5
@@ -302,6 +319,88 @@ class PDFGenerator:
         
         return intervals
 
+    def _add_time_info_to_summary(self, summary_text: str, utterances: List[Dict[str, Any]]) -> str:
+        """
+        Add time information to numbered summary points
+        
+        Args:
+            summary_text: Original summary text with numbered points
+            utterances: List of utterances with timestamps
+            
+        Returns:
+            Summary text with time information added
+        """
+        if not summary_text or not utterances:
+            return summary_text
+        
+        import re
+        
+        # Extract numbered points from summary
+        numbered_points = re.findall(r'(\d+\.\s*\*\*[^*]+\*\*:.*?)(?=\d+\.\s*\*\*|\Z)', summary_text, re.DOTALL)
+        
+        if not numbered_points:
+            return summary_text
+        
+        # Create keyword mapping for each numbered point
+        point_keywords = []
+        for i, point in enumerate(numbered_points, 1):
+            # Extract keywords from the point title
+            title_match = re.search(r'\d+\.\s*\*\*([^*]+)\*\*:', point)
+            if title_match:
+                title = title_match.group(1)
+                # Extract key terms from title
+                keywords = re.findall(r'[가-힣a-zA-Z]+', title)
+                point_keywords.append((i, keywords, point))
+        
+        # Find time ranges for each point based on keyword matching
+        enhanced_summary = summary_text
+        for point_num, keywords, original_point in point_keywords:
+            time_range = self._find_time_range_for_keywords(keywords, utterances)
+            if time_range:
+                # Add time information to the point
+                time_info = f" <i>({time_range})</i>"
+                enhanced_point = original_point.replace('**:', f'**:{time_info}')
+                enhanced_summary = enhanced_summary.replace(original_point, enhanced_point)
+        
+        return enhanced_summary
+
+    def _find_time_range_for_keywords(self, keywords: List[str], utterances: List[Dict[str, Any]]) -> str:
+        """
+        Find time range where keywords are most frequently mentioned
+        
+        Args:
+            keywords: List of keywords to search for
+            utterances: List of utterances with timestamps
+            
+        Returns:
+            Time range string (e.g., "00:30 - 02:15")
+        """
+        if not keywords or not utterances:
+            return ""
+        
+        # Find utterances containing keywords
+        matching_utterances = []
+        for utterance in utterances:
+            text = utterance.get('text', '').lower()
+            if any(keyword.lower() in text for keyword in keywords):
+                matching_utterances.append(utterance)
+        
+        if not matching_utterances:
+            return ""
+        
+        # Get time range
+        timestamps = [u.get('timestamp', 0) for u in matching_utterances]
+        start_time = min(timestamps)
+        end_time = max(timestamps)
+        
+        # Convert to minutes:seconds format
+        start_min = int(start_time // 60)
+        start_sec = int(start_time % 60)
+        end_min = int(end_time // 60)
+        end_sec = int(end_time % 60)
+        
+        return f"{start_min:02d}:{start_sec:02d} - {end_min:02d}:{end_sec:02d}"
+
     def _parse_summary_text(self, text: str) -> str:
         """
         Parse summary text to handle markdown-like formatting and line breaks
@@ -318,41 +417,16 @@ class PDFGenerator:
         # Clean the text first
         text = self._safe_korean_text(text)
         
-        # Handle numbered lists (1. 2. 3. etc.)
+        # Simple approach: just add line breaks after numbered items
         import re
         
-        # Split by numbered patterns and add proper line breaks
-        lines = re.split(r'(\d+\.\s*\*\*[^*]+\*\*:)', text)
+        # Add line breaks after numbered patterns (1. 2. 3. etc.)
+        text = re.sub(r'(\d+\.\s*\*\*[^*]+\*\*:)', r'<br/><br/><b>\1</b>', text)
         
-        if len(lines) > 1:
-            # Reconstruct with proper formatting
-            formatted_lines = []
-            for i, line in enumerate(lines):
-                if re.match(r'\d+\.\s*\*\*[^*]+\*\*:', line):
-                    # This is a numbered header
-                    formatted_lines.append(f'<br/><b>{line}</b>')
-                elif line.strip():
-                    # This is content
-                    formatted_lines.append(line.strip())
-            
-            return '<br/>'.join(formatted_lines)
+        # Add line breaks after sentences for better readability
+        text = re.sub(r'([.!?])\s+', r'\1<br/>', text)
         
-        # If no numbered pattern, try to split by other patterns
-        # Split by double asterisks (bold text)
-        parts = re.split(r'(\*\*[^*]+\*\*)', text)
-        if len(parts) > 1:
-            formatted_parts = []
-            for part in parts:
-                if part.startswith('**') and part.endswith('**'):
-                    # Bold text
-                    formatted_parts.append(f'<b>{part[2:-2]}</b>')
-                elif part.strip():
-                    formatted_parts.append(part.strip())
-            
-            return '<br/>'.join(formatted_parts)
-        
-        # If no special formatting, just add line breaks for readability
-        return text.replace('. ', '.<br/>')
+        return text
     
     def _safe_korean_text(self, text: str) -> str:
         """
@@ -487,13 +561,13 @@ class PDFGenerator:
         # Build PDF content
         story = []
         
-        # Title with modern styling
+        # Title with modern styling (simplified)
         title = self._safe_korean_text(meeting_data.get('title', 'Meeting Summary'))
-        story.append(Paragraph(f"📋 {title}", self.title_style))
-        story.append(Spacer(1, 25))
+        story.append(Paragraph(title, self.title_style))
+        story.append(Spacer(1, 20))
         
-        # Meeting metadata with modern table
-        story.append(Paragraph("📊 Meeting Information", self.heading_style))
+        # Meeting metadata with modern table (simplified header)
+        story.append(Paragraph("Meeting Information", self.heading_style))
         
         # Format meeting date properly
         meeting_date_str = 'N/A'
@@ -540,10 +614,10 @@ class PDFGenerator:
         story.append(meta_table)
         story.append(Spacer(1, 25))
         
-        # Summary with proper formatting
+        # Summary with proper formatting (simplified header)
         raw_summary = meeting_data.get('summary', 'Summary not generated.')
         formatted_summary = self._parse_summary_text(raw_summary)
-        story.append(Paragraph("📝 Meeting Summary", self.heading_style))
+        story.append(Paragraph("Meeting Summary", self.heading_style))
         story.append(Paragraph(formatted_summary, self.body_style))
         story.append(Spacer(1, 20))
         
@@ -551,24 +625,21 @@ class PDFGenerator:
         
         # Content based on summary type
         if summary_type == "general":
-            # Time-based outline (for general summary type)
+            # Add time information for numbered summary points
             if utterances and len(utterances) > 0:
-                story.append(Paragraph("📋 시간대별 목차", self.heading_style))
-                
-                # Group utterances by time ranges (every 5 minutes)
-                time_ranges = self._create_time_ranges(utterances)
-                
-                for i, (time_range, count) in enumerate(time_ranges, 1):
-                    range_text = f"<b>{i}.</b> {time_range} ({count}개 발화)"
-                    story.append(Paragraph(range_text, self.list_style))
-                
-                story.append(Spacer(1, 20))
+                # Extract numbered points from summary and add time info
+                summary_with_time = self._add_time_info_to_summary(raw_summary, utterances)
+                if summary_with_time != raw_summary:
+                    story.append(Paragraph("Summary with Time Information", self.heading_style))
+                    formatted_summary_with_time = self._parse_summary_text(summary_with_time)
+                    story.append(Paragraph(formatted_summary_with_time, self.body_style))
+                    story.append(Spacer(1, 20))
         
         elif summary_type == "meeting":
             # Action items and decisions (for meeting summary type)
             action_items = [a for a in actions if a.get('action_type') == 'assignment']
             if action_items:
-                story.append(Paragraph("✅ Action Items", self.heading_style))
+                story.append(Paragraph("Action Items", self.heading_style))
                 
                 for i, action in enumerate(action_items, 1):
                     description = self._safe_korean_text(action.get('description', ''))
@@ -636,19 +707,19 @@ class PDFGenerator:
         
         story = []
         
-        # Title
-        story.append(Paragraph("📊 회의 분석 리포트", self.title_style))
+        # Title (simplified)
+        story.append(Paragraph("Analytics Report", self.title_style))
         story.append(Spacer(1, 20))
         
-        # Analytics summary
-        story.append(Paragraph("📈 주요 지표", self.heading_style))
+        # Analytics summary (simplified header)
+        story.append(Paragraph("Key Metrics", self.heading_style))
         
         stats_data = [
-            ['총 회의 수', str(analytics_data.get('total_meetings', 0))],
-            ['총 요약 수', str(analytics_data.get('total_summaries', 0))],
-            ['총 액션 아이템', str(analytics_data.get('total_actions', 0))],
-            ['평균 회의 시간', f"{analytics_data.get('average_duration_minutes', 0):.1f}분"],
-            ['요약 완료율', f"{analytics_data.get('summary_completion_rate', 0):.1f}%"]
+            ['Total Meetings', str(analytics_data.get('total_meetings', 0))],
+            ['Total Summaries', str(analytics_data.get('total_summaries', 0))],
+            ['Total Action Items', str(analytics_data.get('total_actions', 0))],
+            ['Average Duration', f"{analytics_data.get('average_duration_minutes', 0):.1f} min"],
+            ['Summary Completion Rate', f"{analytics_data.get('summary_completion_rate', 0):.1f}%"]
         ]
         
         stats_table = Table(stats_data, colWidths=[2.5*inch, 1.5*inch])
@@ -668,9 +739,9 @@ class PDFGenerator:
         # Monthly trend
         monthly_data = analytics_data.get('monthly_meetings', [])
         if monthly_data:
-            story.append(Paragraph("📅 월별 회의 현황", self.heading_style))
+            story.append(Paragraph("Monthly Meeting Trends", self.heading_style))
             
-            month_table_data = [['월', '회의 수']]
+            month_table_data = [['Month', 'Meetings']]
             for month_info in monthly_data[-6:]:  # Last 6 months
                 month_table_data.append([
                     month_info.get('month', ''),
