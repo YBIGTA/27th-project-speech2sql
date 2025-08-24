@@ -7,6 +7,10 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import requests
 import torch
 from config.settings import settings
+from konlpy.tag import Okt
+from typing import List
+
+okt = Okt()
 
 
 class Text2SQLConverter:
@@ -211,22 +215,44 @@ LIMIT {limit}
             "context": context
         }
     
+    def _classify_intent(self, query: str) -> str:
+        """Classify the user's intent based on a scoring system."""
+        query_lower = query.lower()
+        scores = {
+            'speaker': 0,
+            'time': 0,
+            'action': 0,
+            'general': 1 # 기본값 설정
+        }
+    
+        # 의도 키워드 점수 부여
+        if '누가' in query_lower or '발화자' in query_lower:
+            scores['speaker'] += 5
+        if '언제' in query_lower or '날짜' in query_lower or '시간' in query_lower:
+            scores['time'] += 5
+        if '결정' in query_lower or '액션' in query_lower or '무엇을' in query_lower:
+            scores['action'] += 5
+    
+        # 최종 의도 결정
+        return max(scores, key=scores.get)
+    
     def _convert_with_rules(self, natural_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Convert using rule-based approach"""
-        query_lower = natural_query.lower()
-        
-        # Basic pattern matching for common queries
-        if "누가" in natural_query and "언급" in natural_query:
+    
+        # 1. 의도 분류 함수 호출 (여기서 한 번만 실행)
+        intent = self._classify_intent(natural_query)
+
+        # 2. 분류된 의도에 따라 SQL 생성 함수 호출
+        if intent == 'speaker':
             sql = self._generate_speaker_query(natural_query, context)
-        elif "언제" in natural_query or "시간" in natural_query:
+        elif intent == 'time':
             sql = self._generate_time_query(natural_query, context)
-        elif "무엇" in natural_query or "내용" in natural_query:
-            sql = self._generate_content_query(natural_query, context)
-        elif "결정" in natural_query or "액션" in natural_query:
+        elif intent == 'action':
             sql = self._generate_action_query(natural_query, context)
-        else:
+        else: # 'general'을 포함한 모든 경우
             sql = self._generate_general_query(natural_query, context)
-        
+    
+        # 3. 결과 반환
         return {
             "sql_query": sql,
             "natural_query": natural_query,
@@ -331,26 +357,26 @@ LIMIT {limit}
         )
     
     def _extract_keywords(self, query: str) -> List[str]:
-        """Extract keywords from natural language query (KR/EN stopwords, keep numbers)"""
-        stop_words_kr = ['누가', '언제', '무엇을', '무엇', '어떻게', '왜', '언급', '말했다', '에', '에서', '을', '를', '이', '가', '의', '와', '과', '그리고', '또는', '하지만', '그런데']
-        stop_words_en = [
-            'a','an','the','in','on','at','to','of','for','from','by','with','about','as','into','like','through','after','over','between','out','against','during','without','before','under','around','among',
-            'what','who','when','where','why','how','which','whom','whose',
-            'is','am','are','was','were','be','been','being','do','does','did','done','having','have','has',
-            'and','or','but','if','because','while','so','than','too','very','can','could','should','would','will','shall'
+        """
+        Extracts keywords from a natural language query using Konlpy's Okt
+        to identify nouns and then filters them.
+        """
+        # 1. Okt를 사용해 쿼리에서 명사(nouns)만 추출
+        nouns = okt.nouns(query)
+
+        # 2. 불용어(Stopwords) 정의 및 필터링
+        # 기존 불용어 리스트에 명사형 불용어를 추가하는 것이 좋습니다.
+        stop_words = {
+            '누가', '언제', '무엇', '어떻게', '왜', '언급', '말했다',
+            '이', '그', '저', '것', '때', '곳', '분', '회의', '미팅'
+        }
+
+        filtered_nouns = [
+            noun for noun in nouns
+            if len(noun) > 1 and noun not in stop_words
         ]
-        words = re.findall(r"[A-Za-z0-9']+", query)
-        filtered: List[str] = []
-        for w in words:
-            wl = w.lower()
-            if len(wl) <= 1:
-                continue
-            if wl in stop_words_en:
-                continue
-            if w in stop_words_kr:
-                continue
-            filtered.append(wl)
-        return filtered[:5]
+
+        return filtered_nouns
 
     def _extract_year(self, query: str) -> Optional[int]:
         m = re.search(r"\b(19|20)\d{2}\b", query)
