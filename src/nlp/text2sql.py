@@ -1,6 +1,3 @@
-"""
-Text2SQL (Natural Language to SQL) conversion module
-"""
 import re
 from typing import Dict, List, Optional, Tuple, Any
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
@@ -15,42 +12,55 @@ okt = Okt()
 
 class Text2SQLConverter:
     """Natural language to SQL query converter"""
-    
     def __init__(self, model_name: str = None):
-        """
-        Initialize Text2SQL converter
-        
-        Args:
-            model_name: Huggingface model name for Text2SQL
-        """
         self.model_name = model_name or settings.text2sql_model
         self.tokenizer = None
         self.model = None
         self.schema_info = None
-        
-        # Initialize model (lazy loading)
+        self.is_encoder_decoder = False
+        self.dialect = getattr(settings, "text2sql_dialect", "postgresql")  # 옵션 없으면 postgresql 가정
         self._load_model()
-    
+
     def _load_model(self):
-        """Load Text2SQL model"""
+        """Load Text2SQL model (Seq2Seq or CausalLM)"""
         try:
             # Load pre-trained Text2SQL model (local/HF). Optional when using Upstage.
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name)
-            print(f"✅ Text2SQL model loaded: {self.model_name}")
+
+            # 안전한 dtype 결정 (CPU=fp32, CUDA 8.0+=bf16, 그 외 fp16)
+            if torch.cuda.is_available():
+                cc_major = torch.cuda.get_device_capability(0)[0]
+                dtype = torch.bfloat16 if cc_major >= 8 else torch.float16
+            else:
+                dtype = torch.float32
+
+            if self.is_encoder_decoder:
+                # Seq2Seq (T5 등)
+                self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                    self.model_name,
+                    device_map="auto",
+                    torch_dtype=dtype,
+                )
+            else:
+                # Causal LM (e.g., Qwen/Llama/Mistral)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    torch_dtype=dtype,
+                    device_map="auto",
+                )
+
+            # pad/eos 안전 설정
+            if getattr(self.tokenizer, "pad_token_id", None) is None and getattr(self.tokenizer, "eos_token_id", None) is not None:
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+            print(f"✅ Text2SQL model loaded: {self.model_name} (encoder_decoder={self.is_encoder_decoder})")
         except Exception as e:
             print(f"⚠️ Failed to load local Text2SQL model: {e}")
             print("Will attempt Upstage API or fallback rules")
     
     def set_schema_info(self, schema_info: Dict[str, Any]):
-        """
-        Set database schema information
-        
-        Args:
-            schema_info: Database schema information including tables and columns
-        """
         self.schema_info = schema_info
-    
+
     def convert_to_sql(self, natural_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Convert natural language query to SQL
@@ -189,29 +199,59 @@ LIMIT {limit}
         return m.group(0).strip() if m else None
     
     def _convert_with_model(self, natural_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Convert using pre-trained Text2SQL model"""
-        # Prepare input with schema context
         schema_context = self._prepare_schema_context()
-        input_text = f"Schema: {schema_context}\nQuery: {natural_query}"
-        
-        # Tokenize and generate
-        inputs = self.tokenizer(input_text, return_tensors="pt", max_length=512, truncation=True)
-        
-        with torch.no_grad():
-            outputs = self.model.generate(
-                inputs.input_ids,
-                max_length=128,
-                num_beams=4,
-                early_stopping=True
-            )
-        
-        sql_query = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
+        if self.is_encoder_decoder:
+            # T5/Pegasus style (beam search, 샘플링 파라미터 사용 안 함)
+            input_text = self._build_seq2seq_input(schema_context, natural_query)
+            inputs = self.tokenizer(input_text, return_tensors="pt", max_length=1024, truncation=True)
+            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=220,
+                    num_beams=4,
+                    length_penalty=0.0,
+                    early_stopping=True,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                )
+            raw = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        else:
+            # Chat-style causal LM (Qwen/Llama/Mistral)
+            sys_prompt, user_prompt = self._build_chat_prompts(schema_context, natural_query, context)
+            messages = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            inputs = self.tokenizer(prompt, return_tensors="pt", max_length=2048, truncation=True)
+            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+
+            # ✅ CausalLM에서는 do_sample=True와 함께 샘플링 파라미터를 GenerationConfig로만 전달
+            gen_cfg = GenerationConfig.from_model_config(self.model.config)
+            gen_cfg.max_new_tokens = 220
+            gen_cfg.do_sample = True
+            gen_cfg.temperature = 0.2
+            gen_cfg.top_p = 0.95
+            gen_cfg.top_k = 50
+            gen_cfg.num_beams = 1  # 샘플링과 beam을 섞지 않음
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    generation_config=gen_cfg,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                )
+            raw = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        sql_query = self._postprocess_sql(raw)
+
         return {
             "sql_query": sql_query,
             "natural_query": natural_query,
             "method": "model",
-            "confidence": 0.8,
+            "confidence": 0.8 if sql_query else 0.3,
             "context": context
         }
     
@@ -260,45 +300,44 @@ LIMIT {limit}
             "confidence": 0.6,
             "context": context
         }
-    
+
     def _prepare_schema_context(self) -> str:
-        """Prepare database schema context for model input"""
         if not self.schema_info:
-            return "meetings(id, title, date, duration, participants, summary), utterances(id, meeting_id, speaker, timestamp, text), actions(id, meeting_id, description, assignee, due_date)"
-        
+            return (
+                "meetings(id, title, date, duration, participants, summary, audio_path), "
+                "utterances(id, meeting_id, speaker, timestamp, text, confidence), "
+                "actions(id, meeting_id, action_type, description, assignee, due_date)"
+            )
         schema_parts = []
         for table, columns in self.schema_info.items():
             schema_parts.append(f"{table}({', '.join(columns)})")
-        
         return ", ".join(schema_parts)
-    
+
+    # ---------- Rule-based SQL helpers (use ILIKE + escape) ----------
+    def _escape_like(self, s: str) -> str:
+        # %, _, ' 를 단순 이스케이프
+        return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''")
+
     def _generate_speaker_query(self, query: str, context: Dict[str, Any] = None) -> str:
-        """Generate SQL for speaker-related queries"""
-        base_sql = """
-        SELECT DISTINCT u.speaker, u.text, u.timestamp, m.title as meeting_title
+        kw = self._extract_keywords(query)
+        needle = self._escape_like(kw[0]) if kw else ""
+        return f"""
+        SELECT DISTINCT u.speaker, u.text, u.timestamp, m.title AS meeting_title
         FROM utterances u
         JOIN meetings m ON u.meeting_id = m.id
-        WHERE u.text LIKE '%{}%'
-        ORDER BY u.timestamp
-        """
-        
-        # Extract keywords from query
-        keywords = self._extract_keywords(query)
-        if keywords:
-            return base_sql.format(keywords[0])
-        else:
-            return base_sql.format("")
-    
+        WHERE u.text ILIKE '%{needle}%' ESCAPE '\\'
+        ORDER BY u.timestamp;
+        """.strip()
+
     def _generate_time_query(self, query: str, context: Dict[str, Any] = None) -> str:
-        """Generate SQL for time-related queries"""
         return """
-        SELECT u.speaker, u.text, u.timestamp, m.title as meeting_title
+        SELECT u.speaker, u.text, u.timestamp, m.title AS meeting_title
         FROM utterances u
         JOIN meetings m ON u.meeting_id = m.id
         ORDER BY u.timestamp
-        LIMIT 10
-        """
-    
+        LIMIT 10;
+        """.strip()
+
     def _generate_content_query(self, query: str, context: Dict[str, Any] = None) -> str:
         """Generate SQL for content-related queries with basic entity/year handling"""
         year = self._extract_year(query)
@@ -324,14 +363,13 @@ LIMIT {limit}
         )
     
     def _generate_action_query(self, query: str, context: Dict[str, Any] = None) -> str:
-        """Generate SQL for action/decision-related queries"""
         return """
-        SELECT a.description, a.assignee, a.due_date, m.title as meeting_title
+        SELECT a.description, a.assignee, a.due_date, m.title AS meeting_title
         FROM actions a
         JOIN meetings m ON a.meeting_id = m.id
-        ORDER BY a.due_date
-        """
-    
+        ORDER BY a.due_date;
+        """.strip()
+
     def _generate_general_query(self, query: str, context: Dict[str, Any] = None) -> str:
         """Generate SQL for general queries with simple multi-keyword/entity/year support"""
         year = self._extract_year(query)
@@ -405,55 +443,26 @@ LIMIT {limit}
         return entities
     
     def validate_sql(self, sql_query: str) -> bool:
-        """
-        Validate generated SQL query
-        
-        Args:
-            sql_query: SQL query to validate
-        
-        Returns:
-            True if valid, False otherwise
-        """
-        # Basic SQL validation
-        required_keywords = ['SELECT', 'FROM']
-        sql_upper = sql_query.upper()
-        
-        for keyword in required_keywords:
-            if keyword not in sql_upper:
+        if not sql_query:
+            return False
+        upper = sql_query.upper()
+        if "SELECT" not in upper or "FROM" not in upper:
+            return False
+        # 금지 동사
+        for pattern in [' DROP ', ' DELETE ', ' UPDATE ', ' INSERT ', ' CREATE ', ' ALTER ']:
+            if pattern in f" {upper} ":
                 return False
-        
-        # Check for SQL injection patterns
-        dangerous_patterns = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'CREATE', 'ALTER']
-        for pattern in dangerous_patterns:
-            if pattern in sql_upper:
-                return False
-        
+        # 세미콜론 하나만 허용(마지막 종료용)
+        if upper.count(";") > 1:
+            return False
         return True
 
 
-# Global Text2SQL converter instance
+# Global instance & helpers stay the same
 text2sql_converter = Text2SQLConverter()
 
-
 def convert_natural_to_sql(natural_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-    """
-    Convert natural language query to SQL
-    
-    Args:
-        natural_query: Natural language query
-        context: Additional context
-    
-    Returns:
-        Dictionary with SQL query and metadata
-    """
     return text2sql_converter.convert_to_sql(natural_query, context)
 
-
 def set_database_schema(schema_info: Dict[str, Any]):
-    """
-    Set database schema for Text2SQL conversion
-    
-    Args:
-        schema_info: Database schema information
-    """
-    text2sql_converter.set_schema_info(schema_info) 
+    text2sql_converter.set_schema_info(schema_info)
