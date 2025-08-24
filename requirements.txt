@@ -21,6 +21,7 @@ torch>=2.2.0,<2.8.0
 torchaudio>=2.2.0,<2.8.0
 sentence-transformers==2.2.2
 datasets==2.19.0
+konlpy==0.6.0
 
 # Text2SQL
 sqlglot==19.8.0
