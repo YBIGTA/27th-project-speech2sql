@@ -209,24 +209,6 @@ def show_search_page():
     
     query = st.text_input("검색어 입력", placeholder="예: 누가 프로젝트 일정에 대해 언급했나요?")
     st.caption("💡 자연어로 질문하시면 AI가 음성 기록 내용을 분석하여 답변해드립니다.")
-    
-    # Example queries
-    st.subheader("💡 검색 예시")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("📅 날짜/시간", use_container_width=True):
-            st.session_state.query = "이 음성 기록은 언제 녹음되었나요?"
-    with col2:
-        if st.button("👥 참가자/화자", use_container_width=True):
-            st.session_state.query = "누가 이 음성 기록에 참여했나요?"
-    with col3:
-        if st.button("📋 주요 내용", use_container_width=True):
-            st.session_state.query = "이 음성 기록에서 주요하게 다룬 내용은 무엇인가요?"
-    
-    # Use session state for query
-    if hasattr(st.session_state, 'query') and st.session_state.query:
-        query = st.session_state.query
-        st.session_state.query = ""  # Clear after use
 
     meetings_map = _fetch_meetings()
     titles = ["전체(미지정)"] + list(meetings_map.keys())
@@ -540,12 +522,82 @@ def show_summary_page():
                                     st.write(f"**마감일:** {item.get('due_date', 'N/A')}")
                                     st.write(f"**상태:** {item.get('status', 'N/A')}")
                     
-                    # Decisions
+                    # Decisions with improved agreement level display
                     decisions = summary_data.get('decisions', [])
                     if decisions:
                         st.subheader("🎯 결정 사항")
                         for decision in decisions:
-                            st.write(f"• {decision.get('decision', '')}")
+                            # Get agreement level and format display
+                            agreement_level = decision.get('agreement_level', 100)
+                            agenda_title = decision.get('agenda_title', '알 수 없음')
+                            
+                            # Format agreement level display
+                            if agreement_level == 100:
+                                agreement_text = "완전 합의"
+                                color = "🟢"
+                            elif agreement_level >= 80:
+                                agreement_text = "높음"
+                                color = "🟡"
+                            elif agreement_level >= 50:
+                                agreement_text = "보통"
+                                color = "🟠"
+                            else:
+                                agreement_text = "낮음"
+                                color = "🔴"
+                            
+                            # Display with improved format
+                            st.markdown(f"**{color} {agenda_title} (합의 수준: {agreement_level}% - {agreement_text})**")
+                            
+                            # Show decision details
+                            decision_text = decision.get('decision', '')
+                            if decision_text:
+                                st.write(f"• {decision_text}")
+                            
+                            # Show disagreement details if agreement level is not 100%
+                            if agreement_level < 100:
+                                disagreement_details = decision.get('disagreement_details', {})
+                                consensus_reason = decision.get('consensus_reason', '')
+                                
+                                if disagreement_details:
+                                    analysis_quality = disagreement_details.get('analysis_quality', 'unknown')
+                                    
+                                    with st.expander(f"⚠️ 합의되지 않은 부분 상세 분석 (합의 수준: {agreement_level}%)"):
+                                        # Show consensus reason if available
+                                        if consensus_reason:
+                                            st.info(f"**합의 수준 판단 근거:** {consensus_reason}")
+                                        
+                                        # Analysis quality indicator
+                                        if analysis_quality == 'llm_enhanced':
+                                            st.success("🤖 AI 기반 정교한 분석")
+                                        elif analysis_quality == 'rule_based':
+                                            st.warning("📋 규칙 기반 기본 분석")
+                                        
+                                        # Who disagreed
+                                        who_disagreed = disagreement_details.get('who_disagreed', [])
+                                        if who_disagreed:
+                                            st.write(f"**합의하지 않은 참가자:** {', '.join(who_disagreed)}")
+                                        
+                                        # What was disagreed
+                                        what_disagreed = disagreement_details.get('what_disagreed', '')
+                                        if what_disagreed:
+                                            st.write(f"**합의되지 않은 내용:** {what_disagreed}")
+                                        
+                                        # Why disagreed
+                                        why_disagreed = disagreement_details.get('why_disagreed', '')
+                                        if why_disagreed:
+                                            st.write(f"**합의 실패 이유:** {why_disagreed}")
+                                        
+                                        # Suggestions for agreement
+                                        suggestions = disagreement_details.get('suggestions', '')
+                                        if suggestions:
+                                            st.write(f"**합의를 위한 제안:** {suggestions}")
+                                else:
+                                    st.info(f"⚠️ 합의 수준이 {agreement_level}%로 낮습니다. 구체적인 합의되지 않은 부분 정보가 없습니다.")
+                                    
+                                    if consensus_reason:
+                                        st.write(f"**합의 수준 판단 근거:** {consensus_reason}")
+                            
+                            st.divider()
                 
                 st.divider()
                 
