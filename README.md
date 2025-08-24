@@ -23,14 +23,41 @@
 ## 🛠️ 기술 스택
 
 - **STT**: OpenAI Whisper (다국어·잡음 환경 인식)
-- **요약**: PEGASUS, LLaMA2 fine-tune (긴 텍스트 요약)
+- **요약**: Upstage LLM API (한국어 특화 요약)
 - **NL2SQL**: Huggingface Text2SQL 모델
 - **백엔드**: FastAPI
 - **DB**: PostgreSQL
 - **프론트**: Streamlit
-- **LLM API**: Upstage
+- **LLM API**: Upstage, OpenAI
 
-## 📁 프로젝트 구조 (참고만 해주세요! 다른 부분이 있을 수 있습니다.)
+## ✨ 주요 기능
+
+### 🎵 **오디오 처리**
+- 다국어 오디오 파일 업로드 (WAV, MP3, M4A)
+- Whisper 기반 Speech-to-Text 변환
+- Speaker Diarization (발화자 분리)
+- 실시간 처리 상태 확인
+
+### 📝 **요약 생성**
+- **일반 요약**: 회의 전체 내용의 핵심 요약
+- **액션 아이템 중심**: 할 일과 담당자 추출
+- **결정사항 중심**: 회의에서 내린 결정 추출
+- **다국어 지원**: 한국어/영어 요약 생성
+- **PDF 생성**: 깔끔한 PDF 요약본 다운로드
+
+### 🔍 **자연어 검색**
+- **Text2SQL 모드**: 자연어를 SQL로 변환하여 정확한 검색
+- **Full-Text Search 모드**: 키워드 기반 빠른 검색
+- **AI 답변**: 검색 결과를 자연어로 요약 제공
+- **회의별 필터링**: 특정 회의 범위로 검색 제한
+
+### 📊 **분석 및 인사이트**
+- 회의별 참가자 분석
+- 액션 아이템 및 결정사항 추적
+- 회의 효율성 지표 제공
+- 월별 트렌드 분석
+
+## 📁 프로젝트 구조
 
 ```
 speech2sql/
@@ -44,8 +71,7 @@ speech2sql/
 ├── data/
 │   ├── raw/                 # 원본 오디오 파일
 │   ├── processed/           # 처리된 데이터
-│   ├── models/              # 학습된 모델
-│   └── datasets/            # 데이터셋
+│   └── summaries/           # 생성된 PDF 요약본
 ├── src/
 │   ├── __init__.py
 │   ├── audio/
@@ -56,6 +82,9 @@ speech2sql/
 │   │   ├── __init__.py
 │   │   ├── summarization.py # 요약 모델
 │   │   └── text2sql.py      # NL2SQL 변환
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   └── agenda_analysis_agent.py  # 회의 분석 에이전트
 │   ├── database/
 │   │   ├── __init__.py
 │   │   ├── models.py        # DB 스키마
@@ -67,17 +96,15 @@ speech2sql/
 │   │       ├── __init__.py
 │   │       ├── audio.py     # 오디오 업로드
 │   │       ├── query.py     # 자연어 질의
-│   │       └── summary.py   # 요약 생성
+│   │       ├── summary.py   # 요약 생성
+│   │       ├── search.py    # 검색 기능
+│   │       └── analysis.py  # 분석 기능
 │   └── utils/
 │       ├── __init__.py
 │       ├── file_utils.py    # 파일 처리
 │       └── pdf_generator.py # PDF 생성
 ├── frontend/
-│   ├── app.py               # Streamlit 앱
-│   ├── pages/
-│   │   ├── upload.py        # 파일 업로드
-│   │   ├── search.py        # 검색 인터페이스
-│   │   └── analytics.py     # 분석 대시보드
+│   ├── app.py               # Streamlit 메인 앱
 │   └── static/
 │       ├── css/
 │       └── js/
@@ -85,17 +112,16 @@ speech2sql/
 │   ├── __init__.py
 │   ├── test_audio.py
 │   ├── test_nlp.py
-│   └── test_api.py
+│   ├── test_api.py
+│   └── test_llm_extraction.py  # LLM 추출 테스트
 ├── notebooks/
 │   ├── data_analysis.ipynb  # 데이터 분석
 │   ├── model_evaluation.ipynb  # 모델 평가
 │   └── insights.ipynb       # 인사이트 도출
 ├── docs/
-│   ├── api_docs.md
-│   ├── deployment.md
-│   └── research_insights.md
+│   └── api/                 # API 문서
 └── scripts/
-    ├── setup.sh             # 환경 설정
+    ├── setup.py             # 환경 설정
     ├── data_preparation.py  # 데이터 준비
     └── model_training.py    # 모델 학습
 ```
@@ -151,6 +177,32 @@ python -m uvicorn src.api.main:app --reload
 streamlit run frontend/app.py
 ```
 
+## 🎨 사용자 인터페이스
+
+### 📤 **파일 업로드**
+- 드래그 앤 드롭으로 오디오 파일 업로드
+- 지원 형식: WAV, MP3, M4A
+- 실시간 처리 상태 확인
+- 자동 STT 및 발화자 분리
+
+### 📝 **요약 생성**
+- **간편한 요약 생성**: 언어 선택만으로 즉시 요약 생성
+- **회의 주제 표시**: LLM이 추출한 회의 제목을 상단에 표시
+- **깔끔한 레이아웃**: 회색 박스에 요약 내용 표시
+- **PDF 다운로드**: 부가 기능으로 PDF 요약본 생성
+
+### 🔍 **자연어 검색**
+- **직관적인 검색**: 자연어로 질문하면 AI가 답변
+- **검색 모드 선택**: Text2SQL (정확한 검색) vs FTS (빠른 검색)
+- **회의별 필터링**: 특정 회의로 검색 범위 제한
+- **AI 답변**: 검색 결과를 자연어로 요약 제공
+
+### 📊 **분석 대시보드**
+- 회의별 참가자 분석
+- 액션 아이템 및 결정사항 추적
+- 월별 트렌드 분석
+- 회의 효율성 지표
+
 ## 📊 데이터베이스 스키마
 
 ### meetings 테이블
@@ -160,6 +212,7 @@ streamlit run frontend/app.py
 - duration: 회의 시간
 - participants: 참가자 목록
 - summary: 요약 내용
+- summary_type: 요약 유형 (general, action_items, decisions)
 - audio_path: 오디오 파일 경로
 
 ### utterances 테이블
@@ -173,21 +226,9 @@ streamlit run frontend/app.py
 ### actions 테이블
 - id: 고유 식별자
 - meeting_id: 회의 ID (FK)
-- action_type: 액션 타입 (결정, 할당, 논의 등)
+- action_type: 액션 타입 (decision, assignment, discussion)
 - description: 액션 설명
 - assignee: 담당자
 - due_date: 마감일
-
-## 🔬 연구 및 인사이트 도출
-
-### 분석 영역
-1. **회의 패턴 분석**: 발화 시간, 참여도, 주제별 분포
-2. **의사결정 프로세스**: 결정 사항과 논의 과정의 상관관계
-3. **효율성 지표**: 회의 시간 대비 결정 사항 수
-4. **참가자별 특성**: 발화 스타일, 영향력 분석
-
-### 오픈소스 기술 이해
-- Whisper 아키텍처 및 fine-tuning 방법
-- Speaker Diarization 알고리즘 비교
-- Text2SQL 모델의 내부 동작 원리
-- 대용량 오디오 처리 최적화 기법 
+- status: 상태 (pending, completed, cancelled)
+- priority: 우선순위 (low, medium, high)

@@ -268,9 +268,7 @@ backup/
 *.backup
 *.old
 
-# Test files
-test_*.py
-*_test.py
+# Test files (excluding specific test data files)
 test_data/
 test_outputs/
 

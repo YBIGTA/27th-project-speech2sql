@@ -19,6 +19,7 @@ class Meeting(Base):
     duration = Column(Float)  # Duration in seconds
     participants = Column(JSON)  # List of participant names
     summary = Column(Text)
+    summary_type = Column(String(20), default="general")  # general, meeting
     audio_path = Column(String(500))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
