@@ -1,9 +1,20 @@
+<<<<<<< HEAD
 import streamlit as st
 import requests
 import json
 from datetime import datetime
 import os
 from typing import Dict
+=======
+<<<<<<< HEAD
+import streamlit as st
+import requests
+import json
+from typing import Dict
+from datetime import datetime
+
+API_BASE_URL = "http://localhost:8000/api/v1"
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
 
 @st.cache_data(ttl=30)
 def _fetch_meetings() -> Dict[str, int]:
@@ -18,11 +29,36 @@ def _fetch_meetings() -> Dict[str, int]:
     return {}
 
 
+<<<<<<< HEAD
 def search_meetings():
+=======
+def search_by_natural_language():   
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
     st.header("🔍 자연어 검색")
     
     query = st.text_input("검색어 입력", placeholder="예: 누가 프로젝트 일정에 대해 언급했나요?")
     st.caption("💡 자연어로 질문하시면 AI가 음성 기록 내용을 분석하여 답변해드립니다.")
+<<<<<<< HEAD
+=======
+    
+    # Example queries
+    st.subheader("💡 검색 예시")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("📅 날짜/시간", use_container_width=True):
+            st.session_state.query = "이 음성 기록은 언제 녹음되었나요?"
+    with col2:
+        if st.button("👥 참가자/화자", use_container_width=True):
+            st.session_state.query = "누가 이 음성 기록에 참여했나요?"
+    with col3:
+        if st.button("📋 주요 내용", use_container_width=True):
+            st.session_state.query = "이 음성 기록에서 주요하게 다룬 내용은 무엇인가요?"
+    
+    # Use session state for query
+    if hasattr(st.session_state, 'query') and st.session_state.query:
+        query = st.session_state.query
+        st.session_state.query = ""  # Clear after use
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
 
     meetings_map = _fetch_meetings()
     titles = ["전체(미지정)"] + list(meetings_map.keys())
@@ -77,3 +113,14 @@ def search_meetings():
                 st.error(f"검색 실패: {resp.status_code} {resp.text}")
         except Exception as e:
             st.error(f"요청 오류: {e}")
+<<<<<<< HEAD
+=======
+=======
+# 검색 인터페이스
+
+# 임시
+import streamlit as st
+
+class Search:
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e

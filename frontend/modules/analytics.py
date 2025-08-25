@@ -1,3 +1,12 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+# 분석 대시보드
+=======
+# 분석 대시보드
+
+# 임시
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
 import streamlit as st
 import requests
 import json
@@ -5,6 +14,7 @@ from datetime import datetime
 import os
 from typing import Dict
 
+<<<<<<< HEAD
 @st.cache_data(ttl=30)
 def _fetch_meetings() -> Dict[str, int]:
     try:
@@ -152,3 +162,7 @@ def _display_comprehensive_analysis(result):
                             st.write("**🔴 낮은 합의 결정사항:**")
                             for i, decision in enumerate(low_consensus, 1):
                                 st.write(f"  {i}. {decision.get('content', 'N/A')}")
+=======
+class Analytics:
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e

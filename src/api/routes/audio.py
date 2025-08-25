@@ -5,7 +5,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 import os
-from datetime import datetime
+import datetime
 from config.settings import settings
 from config.database import get_db
 from sqlalchemy.orm import Session
@@ -62,7 +62,7 @@ async def upload_audio(
 
     # Save file
     os.makedirs(settings.audio_upload_path, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{timestamp}_{file.filename}"
     file_path = os.path.join(settings.audio_upload_path, filename)
 
@@ -73,11 +73,12 @@ async def upload_audio(
     parsed_meeting_date = None
     if meeting_date:
         try:
-            from datetime import datetime, date
             # Parse date string (YYYY-MM-DD format)
-            parsed_date = date.fromisoformat(meeting_date)
+            parsed_date = datetime.date.fromisoformat(meeting_date)
             # Convert to datetime with default time (noon)
-            parsed_meeting_date = datetime.combine(parsed_date, datetime.min.time().replace(hour=12))
+            parsed_meeting_date = datetime.datetime.combine(
+                parsed_date, 
+                datetime.datetime.min.time().replace(hour=12))
         except Exception as e:
             print(f"Could not parse meeting date: {e}")
     

@@ -1,11 +1,23 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
 import streamlit as st
 import requests
 import json
 from datetime import datetime
+<<<<<<< HEAD
 import os
 from typing import Dict
 
 def upload_file():
+=======
+
+API_BASE_URL = "http://localhost:8000/api/v1"
+
+def upload_file():
+
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
     st.header("📁 파일 업로드")
     
     # Upload form
@@ -48,4 +60,16 @@ def upload_file():
                 else:
                     st.error(f"업로드 실패: {resp.status_code} {resp.text}")
             except Exception as e:
+<<<<<<< HEAD
                 st.error(f"요청 오류: {e}")
+=======
+                st.error(f"요청 오류: {e}")
+=======
+# 파일 업로드
+
+# 임시
+import streamlit as st
+
+class Upload:
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
