@@ -6,7 +6,21 @@ import requests
 import json
 from datetime import datetime
 import os
+<<<<<<< HEAD
 from typing import Dict
+
+from modules.upload import upload_file
+<<<<<<< HEAD
+from modules.search import search_meetings, _fetch_meetings
+from modules.analytics import analyze_meetings, _display_comprehensive_analysis
+=======
+from modules.search import search_by_natural_language, _fetch_meetings
+=======
+# from modules.upload import Upload
+# from modules.search import Search
+# from modules.analytics import Analytics
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
 
 # Page configuration
 st.set_page_config(
@@ -39,6 +53,9 @@ st.markdown("""
         border-left: 5px solid #1f77b4;
         margin-bottom: 1rem;
     }
+    .feature-fard:hover {
+        cursor: pointer;
+    }
     .upload-area {
         border: 2px dashed #ccc;
         border-radius: 10px;
@@ -50,6 +67,7 @@ st.markdown("""
         cursor: pointer;
     }
     .stButton > button {
+<<<<<<< HEAD
         background-color: #1f77b4;
         color: white;
         border: none;
@@ -61,6 +79,21 @@ st.markdown("""
     .stButton > button:hover {
         background-color: #145a86;
         color: white;
+    .stSelectbox > div:focus-within {
+        border-color: #145a86;
+=======
+    background-color: #1f77b4;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+    }
+    .stButton > button:hover {
+    background-color: #145a86;
+    color: white;
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
     }
 </style>
 """, unsafe_allow_html=True)
@@ -73,16 +106,16 @@ def main():
     """Main application"""
     
     # Header
-    st.markdown('<h1 class="main-header">🎤 Speech2SQL</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🎤 Speech2SQL 📑</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">강의·회의록 생성 및 검색 시스템</p>', unsafe_allow_html=True)
     
     # Sidebar navigation
-    st.sidebar.title("📋 메뉴")
+    # st.sidebar.title("📋 메뉴")
     page = st.sidebar.selectbox(
         "페이지 선택",
         ["🏠 홈", "📁 파일 업로드", "🔍 자연어 검색", "🤖 멀티에이전트 분석", "📄 요약 생성"]
     )
-    
+
     # Page routing
     if page == "🏠 홈":
         show_home_page()
@@ -98,7 +131,7 @@ def main():
 
 def show_home_page():
     """Home page content"""
-    st.header("🏠 환영합니다!")
+    st.header("📱 기능 소개")
     
     # Features overview
     col1, col2 = st.columns(2)
@@ -145,288 +178,57 @@ def show_home_page():
 
 def show_upload_page():
     """File upload page"""
+<<<<<<< HEAD
+    upload_file()
+
+=======
+<<<<<<< HEAD
+    upload_file()
+=======
     st.header("📁 파일 업로드")
     
     # Upload form
     with st.form("upload_form"):
         uploaded_file = st.file_uploader(
             "오디오 파일 선택",
-            type=['wav'],
-            help="지원 형식: WAV (최대 100MB)"
+            type=['wav', 'mp3', 'm4a'],
+            help="지원 형식: WAV, MP3, M4A (최대 100MB)"
         )
+        
         title = st.text_input("회의 제목", placeholder="예: 팀 프로젝트 기획 회의")
         
-        # Meeting date selection
-        meeting_date = st.date_input(
-            "회의 날짜",
-            value=datetime.now().date(),
-            help="실제 회의가 진행된 날짜를 선택하세요"
+        participants = st.text_area(
+            "참가자 목록",
+            placeholder="참가자 이름을 줄바꿈으로 구분하여 입력하세요 \n예:\n김철수\n이영희\n박민수"
         )
         
-        participants_text = st.text_area(
-            "참가자 목록",
-            placeholder="참가자 이름을 줄바꿈으로 구분하여 입력하세요\n예:\n김철수\n이영희\n박민수"
-        )
         submitted = st.form_submit_button("업로드 및 처리 시작")
-
-        if submitted:
-            if not uploaded_file:
-                st.error("파일을 선택하세요.")
-                return
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type or "application/octet-stream")}
-            data = {
-                "title": title,
-                "meeting_date": meeting_date.isoformat(),
-                "participants": participants_text.strip().split('\n') if participants_text.strip() else []
-            }
-            try:
-                resp = requests.post(f"{API_BASE_URL}/audio/upload", files=files, data=data, timeout=600)
-                if resp.status_code == 200:
-                    j = resp.json()
-                    st.success(f"업로드 성공: segments={j.get('segments')} 파일={j.get('filename')}")
-                else:
-                    st.error(f"업로드 실패: {resp.status_code} {resp.text}")
-            except Exception as e:
-                st.error(f"요청 오류: {e}")
-
-
-@st.cache_data(ttl=30)
-def _fetch_meetings() -> Dict[str, int]:
-    try:
-        r = requests.get(f"{API_BASE_URL}/query/meetings", timeout=10)
-        if r.status_code == 200:
-            data = r.json().get("meetings", [])
-            # map title (display) to id
-            return {f"{m.get('title')} (id:{m.get('id')})": m.get('id') for m in data}
-    except Exception:
-        pass
-    return {}
+        
+        if submitted and uploaded_file:
+            # TODO: Implement file upload to API
+            st.success(f"파일 '{uploaded_file.name}' 업로드 완료!")
+            st.info("음성 인식 및 요약 처리가 진행 중입니다. 잠시만 기다려주세요.")
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
 
 
 def show_search_page():
     """Natural language search page"""
-    st.header("🔍 자연어 검색")
-    
-    query = st.text_input("검색어 입력", placeholder="예: 누가 프로젝트 일정에 대해 언급했나요?")
-    st.caption("💡 자연어로 질문하시면 AI가 음성 기록 내용을 분석하여 답변해드립니다.")
-    
-    # Example queries
-    st.subheader("💡 검색 예시")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("📅 날짜/시간", use_container_width=True):
-            st.session_state.query = "이 음성 기록은 언제 녹음되었나요?"
-    with col2:
-        if st.button("👥 참가자/화자", use_container_width=True):
-            st.session_state.query = "누가 이 음성 기록에 참여했나요?"
-    with col3:
-        if st.button("📋 주요 내용", use_container_width=True):
-            st.session_state.query = "이 음성 기록에서 주요하게 다룬 내용은 무엇인가요?"
-    
-    # Use session state for query
-    if hasattr(st.session_state, 'query') and st.session_state.query:
-        query = st.session_state.query
-        st.session_state.query = ""  # Clear after use
-
-    meetings_map = _fetch_meetings()
-    titles = ["전체(미지정)"] + list(meetings_map.keys())
-    sel = st.selectbox("회의 선택(선택)", titles, index=0, help="text2sql 모드에서는 회의 지정 시 해당 회의로 범위를 제한합니다.")
-    selected_meeting_id = None if sel == "전체(미지정)" else meetings_map.get(sel)
-
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        mode = st.selectbox("검색 모드", ["text2sql", "fts"], index=0, help="text2sql: NL→SQL, fts: Full-Text Search")
-    with col2:
-        limit = st.selectbox("결과 수", [5, 10, 20, 50], index=0)
-    with col3:
-        run = st.button("🔍 검색", type="primary")
-
-    if run and query:
-        st.info("검색 중...")
-        try:
-            payload = {"query": query, "limit": int(limit), "mode": mode}
-            if selected_meeting_id:
-                payload["meeting_id"] = int(selected_meeting_id)
-            resp = requests.post(f"{API_BASE_URL}/query/natural", json=payload, timeout=60)
-            if resp.status_code == 200:
-                j = resp.json()
-                st.subheader("검색 결과")
-                
-                # Display natural language answer prominently
-                answer = j.get('answer')
-                if answer:
-                    st.success("🤖 AI 답변")
-                    st.write(answer)
-                    st.divider()
-                
-                # Display technical details in collapsible section
-                with st.expander("🔧 기술적 세부사항"):
-                    st.caption(f"SQL: {j.get('sql_query')}")
-                    st.caption(f"총 {j.get('total_count')}건, 실행 {j.get('execution_time')}s")
-                
-                # Display source utterances
-                results = j.get("results", [])
-                if results:
-                    st.subheader("📋 참고 발화")
-                    for i, r in enumerate(results[:5], start=1):  # Show first 5 results
-                        with st.expander(f"발화 {i}"):
-                            st.markdown(f"**발화자**: {r.get('speaker','-')}")
-                            st.markdown(f"**시간**: {r.get('timestamp','-')}")
-                            st.markdown(f"**내용**: {r.get('text','')}")
-                            st.markdown(f"**회의**: {r.get('meeting_title','-')}")
-                    
-                    if len(results) > 5:
-                        st.info(f"... 및 {len(results) - 5}개의 추가 발화가 있습니다.")
-            else:
-                st.error(f"검색 실패: {resp.status_code} {resp.text}")
-        except Exception as e:
-            st.error(f"요청 오류: {e}")
-
+<<<<<<< HEAD
+    search_meetings()
 
 def show_agent_analysis_page():
     """Multi-agent analysis page"""
-    st.header("🤖 멀티에이전트 분석")
-    st.caption("AI 에이전트들이 회의 내용을 심도 있게 분석하여 인사이트를 제공합니다.")
-    
-    # Meeting selection
-    meetings_map = _fetch_meetings()
-    if not meetings_map:
-        st.warning("분석할 회의가 없습니다. 먼저 오디오 파일을 업로드해주세요.")
-        return
-    
-    st.subheader("📋 회의 선택")
-    meeting_titles = list(meetings_map.keys())
-    selected_meeting = st.selectbox(
-        "분석할 회의를 선택하세요",
-        meeting_titles,
-        help="업로드된 회의 목록에서 선택하세요"
-    )
-    
-    if selected_meeting:
-        meeting_id = meetings_map[selected_meeting]
-        
-        # Run analysis button
-        if st.button("🚀 분석 시작", type="primary", use_container_width=True):
-            with st.spinner("AI 에이전트들이 분석을 수행하고 있습니다..."):
-                try:
-                    payload = {
-                        "meeting_id": meeting_id,
-                        "analysis_type": "comprehensive"
-                    }
-                    
-                    response = requests.post(f"{API_BASE_URL}/analysis/comprehensive", 
-                                           json=payload, timeout=120)
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        st.success("✅ 분석이 완료되었습니다!")
-                        
-                        # Display comprehensive analysis results
-                        _display_comprehensive_analysis(result)
-                    else:
-                        st.error(f"분석 실패: {response.status_code} {response.text}")
-                        
-                except Exception as e:
-                    st.error(f"분석 중 오류가 발생했습니다: {e}")
+    analyze_meetings()
+=======
+    search_by_natural_language()
 
 
-def _display_comprehensive_analysis(result):
-    """Display comprehensive analysis results"""
-    st.subheader("📊 종합 분석 결과")
-    
-    # Executive summary
-    if "executive_summary" in result:
-        st.success("📋 실행 요약")
-        st.write(result["executive_summary"])
-        st.divider()
-    
-
-
-    
-    # Detailed analysis
-    if "comprehensive_analysis" in result:
-        st.subheader("🔍 상세 분석")
-        analysis = result["comprehensive_analysis"]
-        
-        # Speaker insights
-        if "speaker_insights" in analysis:
-            with st.expander("👥 화자 분석 결과"):
-                speaker_insights = analysis["speaker_insights"]
-                if "speaker_profiles" in speaker_insights:
-                    speakers = speaker_insights["speaker_profiles"]
-                    for speaker, profile in speakers.items():
-                        st.write(f"**{speaker}**:")
-                        st.write(f"- 참여도: {profile['profile']['participation_rate']:.1%}")
-                        st.write(f"- 의사소통 스타일: {profile['profile']['communication_style']}")
-                        st.write(f"- 주제 관심도: {', '.join(profile['topic_preferences'])}")
-                        st.divider()
-        
-        # Agenda insights
-        if "agenda_insights" in analysis:
-            agenda_insights = analysis["agenda_insights"]
-            if "agenda_analysis" in agenda_insights:
-                agendas = agenda_insights["agenda_analysis"]
-                
-                # Individual agenda analysis
-                st.subheader("🔍 안건별 결정사항")
-                
-                for agenda_id, agenda_data in agendas.items():
-                    agenda_info = agenda_data.get('agenda_info', {})
-                    consensus = agenda_data.get("consensus", {})
-                    decisions = agenda_data.get("decisions", [])
-                    summary = agenda_data.get("summary", "")
-                    
-                    # 결정사항이 있는 안건만 표시
-                    if not decisions:
-                        continue
-                    
-                    # 안건 제목을 짧게 요약
-                    title = agenda_info.get('title', 'Unknown')
-                    if len(title) > 30:
-                        title = title[:30] + "..."
-                    
-                    # Consensus level에 따른 색상 설정
-                    consensus_level = consensus.get('level', '불명확')
-                    if consensus_level == '높음':
-                        consensus_color = "🟢"
-                    elif consensus_level == '보통':
-                        consensus_color = "🟡"
-                    else:
-                        consensus_color = "🔴"
-                    
-                    with st.expander(f"{consensus_color} {title}"):
-                        # 합의 수준
-                        consensus_score = consensus.get('score', 0)
-                        st.write(f"**🤝 합의 수준**: {consensus_level} ({consensus_score:.1%})")
-                        
-                        # 결정사항 (합의 수준별로 정렬되어 있음)
-                        st.write("**✅ 결정사항:**")
-                        
-                        # 합의 수준별로 그룹화
-                        high_consensus = [d for d in decisions if d.get('consensus_score', 0) > 0.7]
-                        medium_consensus = [d for d in decisions if 0.4 <= d.get('consensus_score', 0) <= 0.7]
-                        low_consensus = [d for d in decisions if d.get('consensus_score', 0) < 0.4]
-                        
-                        if high_consensus:
-                            st.write("**🟢 높은 합의 결정사항:**")
-                            for i, decision in enumerate(high_consensus, 1):
-                                st.write(f"  {i}. {decision.get('content', 'N/A')}")
-                        
-                        if medium_consensus:
-                            st.write("**🟡 보통 합의 결정사항:**")
-                            for i, decision in enumerate(medium_consensus, 1):
-                                st.write(f"  {i}. {decision.get('content', 'N/A')}")
-                        
-                        if low_consensus:
-                            st.write("**🔴 낮은 합의 결정사항:**")
-                            for i, decision in enumerate(low_consensus, 1):
-                                st.write(f"  {i}. {decision.get('content', 'N/A')}")
-
-
-
-
-
-
+def show_analytics_page():
+    """Analytics dashboard page"""
+    st.header("📊 분석 대시보드")
+    st.info("향후 구현 예정")
+>>>>>>> 88af335c9844ef7d6b0732c0dbc3330b6d0f691e
 
 
 def show_summary_page():
@@ -447,8 +249,19 @@ def show_summary_page():
         help="업로드된 회의 목록에서 선택하세요"
     )
     
+<<<<<<< HEAD
     if selected_meeting:
         meeting_id = meetings_map[selected_meeting]
+=======
+    summary_type = st.selectbox(
+        "요약 유형",
+        ["일반 요약", "액션 아이템", "결정사항"]
+    )
+    
+    if st.button("▶️ 요약 생성", type="primary"):
+        # TODO: Implement summary generation
+        st.success("요약 생성이 시작되었습니다!")
+>>>>>>> f4019648f6d7bc1c24203184b859f5e6aca469a8
         
         # Get meeting details
         try:
@@ -463,7 +276,8 @@ def show_summary_page():
                 with col2:
                     st.metric("회의 날짜", meeting_info.get('date', 'N/A')[:10] if meeting_info.get('date') else 'N/A')
                 with col3:
-                    st.metric("회의 시간", f"{meeting_info.get('duration', 0)}분")
+                    duration_minutes = round (meeting_info.get('duration', 0) / 60, 1)
+                    st.metric("회의 시간", f"{duration_minutes}분")
                 
                 # Participants
                 participants = meeting_info.get('participants', [])
@@ -540,12 +354,82 @@ def show_summary_page():
                                     st.write(f"**마감일:** {item.get('due_date', 'N/A')}")
                                     st.write(f"**상태:** {item.get('status', 'N/A')}")
                     
-                    # Decisions
+                    # Decisions with improved agreement level display
                     decisions = summary_data.get('decisions', [])
                     if decisions:
                         st.subheader("🎯 결정 사항")
                         for decision in decisions:
-                            st.write(f"• {decision.get('decision', '')}")
+                            # Get agreement level and format display
+                            agreement_level = decision.get('agreement_level', 100)
+                            agenda_title = decision.get('agenda_title', '알 수 없음')
+                            
+                            # Format agreement level display
+                            if agreement_level == 100:
+                                agreement_text = "완전 합의"
+                                color = "🟢"
+                            elif agreement_level >= 80:
+                                agreement_text = "높음"
+                                color = "🟡"
+                            elif agreement_level >= 50:
+                                agreement_text = "보통"
+                                color = "🟠"
+                            else:
+                                agreement_text = "낮음"
+                                color = "🔴"
+                            
+                            # Display with improved format
+                            st.markdown(f"**{color} {agenda_title} (합의 수준: {agreement_level}% - {agreement_text})**")
+                            
+                            # Show decision details
+                            decision_text = decision.get('decision', '')
+                            if decision_text:
+                                st.write(f"• {decision_text}")
+                            
+                            # Show disagreement details if agreement level is not 100%
+                            if agreement_level < 100:
+                                disagreement_details = decision.get('disagreement_details', {})
+                                consensus_reason = decision.get('consensus_reason', '')
+                                
+                                if disagreement_details:
+                                    analysis_quality = disagreement_details.get('analysis_quality', 'unknown')
+                                    
+                                    with st.expander(f"⚠️ 합의되지 않은 부분 상세 분석 (합의 수준: {agreement_level}%)"):
+                                        # Show consensus reason if available
+                                        if consensus_reason:
+                                            st.info(f"**합의 수준 판단 근거:** {consensus_reason}")
+                                        
+                                        # Analysis quality indicator
+                                        if analysis_quality == 'llm_enhanced':
+                                            st.success("🤖 AI 기반 정교한 분석")
+                                        elif analysis_quality == 'rule_based':
+                                            st.warning("📋 규칙 기반 기본 분석")
+                                        
+                                        # Who disagreed
+                                        who_disagreed = disagreement_details.get('who_disagreed', [])
+                                        if who_disagreed:
+                                            st.write(f"**합의하지 않은 참가자:** {', '.join(who_disagreed)}")
+                                        
+                                        # What was disagreed
+                                        what_disagreed = disagreement_details.get('what_disagreed', '')
+                                        if what_disagreed:
+                                            st.write(f"**합의되지 않은 내용:** {what_disagreed}")
+                                        
+                                        # Why disagreed
+                                        why_disagreed = disagreement_details.get('why_disagreed', '')
+                                        if why_disagreed:
+                                            st.write(f"**합의 실패 이유:** {why_disagreed}")
+                                        
+                                        # Suggestions for agreement
+                                        suggestions = disagreement_details.get('suggestions', '')
+                                        if suggestions:
+                                            st.write(f"**합의를 위한 제안:** {suggestions}")
+                                else:
+                                    st.info(f"⚠️ 합의 수준이 {agreement_level}%로 낮습니다. 구체적인 합의되지 않은 부분 정보가 없습니다.")
+                                    
+                                    if consensus_reason:
+                                        st.write(f"**합의 수준 판단 근거:** {consensus_reason}")
+                            
+                            st.divider()
                 
                 st.divider()
                 
@@ -587,4 +471,4 @@ def show_summary_page():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
