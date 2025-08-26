@@ -1,0 +1,4 @@
+## 업로드 파일 용량 100MB로 제한
+
+[server]
+maxUploadSize = 100
